@@ -92,7 +92,7 @@ services:
       KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/kc_admin_password
 
       # Configuracao de Dominio, HTTP e Proxy
-      KC_HOSTNAME: ${KC_HOSTNAME} # Ex: https://auth.prefeitura.gov.br
+      KC_HOSTNAME: ${KC_HOSTNAME} # Ex: https://sso.papermoon.cloud
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
       KC_PROXY_TRUSTED_ADDRESSES: ${PROXY_TRUSTED_ADDRESSES:-172.16.0.0/12}

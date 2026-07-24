@@ -74,7 +74,7 @@ else
     POSTGRES_DB_V=$(ask "Nome do banco Postgres" "keycloak")
     POSTGRES_USER_V=$(ask "Usuario do Postgres" "keycloak_user")
     KC_ADMIN_USER_V=$(ask "Usuario admin inicial do Keycloak" "kc_admin")
-    KC_HOSTNAME_V=$(ask "Hostname publico (https://...)" "https://auth.prefeitura.gov.br")
+    KC_HOSTNAME_V=$(ask "Hostname publico (https://...)" "https://sso.papermoon.cloud")
     PROXY_TRUSTED_V=$(ask "CIDR de rede confiavel para o proxy" "172.16.0.0/12")
     AD_DOMAIN_V=$(ask "Dominio do Active Directory" "prefeitura.local")
     AD_DC_HOST_V=$(ask "Hostname do Domain Controller" "dc01.prefeitura.local")
