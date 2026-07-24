@@ -39,9 +39,12 @@ jobs:
         run: sudo apt-get update -qq && sudo apt-get install -y shellcheck
 
       - name: shellcheck nos scripts do repositorio
+        # -S warning: nao trava em achados "info"/"style" (ex.: SC1091 de
+        # source dinamico) - so' falha em warning/error pra valer.
         run: |
-          shellcheck setup.sh deploy.sh docker-entrypoint-secrets.sh \
-            scripts/backup.sh scripts/restore_test.sh scripts/lib/theme.sh
+          shellcheck -S warning setup.sh deploy.sh manage.sh docker-entrypoint-secrets.sh \
+            scripts/backup.sh scripts/restore_test.sh scripts/configure_ldap.sh \
+            scripts/lib/theme.sh scripts/lib/services.sh
 
       - name: Instalar hadolint
         run: |
