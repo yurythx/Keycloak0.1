@@ -30,7 +30,7 @@ pré-voo e sem nenhuma ação destrutiva por padrão:
   status, origem da imagem e URLs. Se algo falhar, imprime os últimos logs
   automaticamente.
   ```bash
-  ./deploy.sh                 # modo producao: pull do ghcr.io + up -d
+  ./deploy.sh                 # modo producao: pull do registry (KEYCLOAK_IMAGE) + up -d
   ./deploy.sh --build          # builda a imagem localmente (dev/homologacao)
   ./deploy.sh --no-pull        # usa a imagem ja em cache local, sem baixar de novo
   ./deploy.sh --down          # derruba a stack (preserva o volume do DB)
@@ -48,26 +48,39 @@ Os comandos manuais abaixo em cada etapa continuam documentados como
 referência/fallback, mas o caminho recomendado é sempre `./setup.sh`
 seguido de `./deploy.sh`.
 
-## CI/CD e Registry (`.github/workflows/ci.yml`)
+## CI/CD e Registry
 
 **Build fora da VM**: a imagem do Keycloak não é mais construída na VM de
-produção. O pipeline em `.github/workflows/ci.yml` builda, valida e publica
-a imagem no GitHub Container Registry (`ghcr.io`); a VM só faz `docker
-compose pull` (via `./deploy.sh`). Isso tira o processo de build — e suas
-dependências (compiladores, cache, superfície de ataque) — de cima do
-servidor que atende ao público.
+produção. O pipeline builda, valida e publica a imagem num registry; a VM
+só faz `docker compose pull` (via `./deploy.sh`). Isso tira o processo de
+build — e suas dependências (compiladores, cache, superfície de ataque) —
+de cima do servidor que atende ao público.
 
-**O que a pipeline faz, em toda `push`/PR para `main`:**
+Existem **dois pipelines equivalentes, um por plataforma** — cada uma só
+processa o arquivo que reconhece, não há conflito em manter os dois no
+mesmo repositório:
+
+| | GitHub Actions | GitLab CI |
+|---|---|---|
+| Arquivo | `.github/workflows/ci.yml` | `.gitlab-ci.yml` |
+| Registry | GitHub Container Registry (`ghcr.io`) | GitLab Container Registry (`$CI_REGISTRY_IMAGE`) |
+| Credencial | `secrets.GITHUB_TOKEN` (automático) | `$CI_REGISTRY_USER`/`$CI_REGISTRY_PASSWORD` (automático) |
+| Variável de imagem | `ghcr.io/<owner>/keycloak-sso` | `registry.<host>/<grupo>/<projeto>` |
+
+**O que cada pipeline faz, em todo push/MR para a branch principal:**
 1. **Lint** — `shellcheck` em todos os `.sh`, `hadolint` no `Dockerfile`,
-   `docker compose config` para validar o compose.
-2. **Build** — builda a imagem (roda inclusive em Pull Requests, para pegar
-   erro de build antes do merge).
+   `docker compose config` para validar o compose (roda sem precisar de um
+   daemon Docker de verdade).
+2. **Build** — builda a imagem (roda inclusive em Pull Request/Merge
+   Request, para pegar erro de build antes do merge).
 3. **Scan de vulnerabilidades** — [Trivy](https://aquasecurity.github.io/trivy/)
    escaneia a imagem buildada; a pipeline **falha** se houver vulnerabilidade
    `HIGH` ou `CRITICAL` com correção disponível.
-4. **Push** (só em push real para `main`, nunca em PR) — publica em
-   `ghcr.io/<owner>/keycloak-sso` com duas tags: `latest` e `sha-<7 chars
-   do commit>`. Em uma tag `vX.Y.Z`, publica também essa tag de versão.
+4. **Push** (só em push/pipeline real na branch principal, nunca em PR/MR)
+   — publica com duas tags: `latest` e `sha-<7 chars do commit>`. Numa tag
+   `vX.Y.Z`, publica também essa tag de versão.
+
+### GitHub Actions — detalhes específicos
 
 **Visibilidade do pacote no GHCR** — decisão a tomar antes do primeiro
 deploy em produção via pull:
@@ -84,21 +97,40 @@ deploy em produção via pull:
   Gere o PAT em GitHub → Settings → Developer settings → Personal access
   tokens, com escopo mínimo `read:packages`.
 
-**Reprodutibilidade em produção**: por padrão `KEYCLOAK_IMAGE_TAG=latest`
-(flutuante). Para "risco zero" de uma atualização inesperada da imagem,
-trave em produção num `sha-xxxxxxx` específico (a pipeline mostra a tag
-exata publicada no resumo da execução, em *Actions → (run) → Summary*):
-```bash
-# no .env da VM
-KEYCLOAK_IMAGE_TAG=sha-1a2b3c4
-```
-
 **Permissões do `GITHUB_TOKEN`**: a pipeline usa o token automático do
 GitHub Actions (nenhum secret manual necessário) para publicar no ghcr.io.
 Se a organização/repositório tiver a permissão padrão do workflow
 restrita a somente-leitura (Settings → Actions → General → Workflow
 permissions), habilite "Read and write permissions" — sem isso o passo de
 push falha com `403`.
+
+### GitLab CI — detalhes específicos
+
+**Runner privileged**: o job `build-scan-push` usa Docker-in-Docker
+(`docker:27-dind`) para conseguir buildar imagens dentro do próprio CI. O
+runner que executar esse job precisa estar configurado com `privileged =
+true` (em `[runners.docker]` no `config.toml` do runner, ou na config do
+runner no GitLab self-hosted). Sem isso o job falha tentando conversar com
+o daemon Docker interno — é a causa mais comum de pipeline quebrada aqui.
+
+**Registry do projeto**: `$CI_REGISTRY_IMAGE`, `$CI_REGISTRY_USER` e
+`$CI_REGISTRY_PASSWORD` são providos automaticamente pelo GitLab para
+qualquer projeto com o Container Registry habilitado (Settings → General →
+Visibility → Container Registry) — nenhum secret manual necessário, mesmo
+princípio do `GITHUB_TOKEN`.
+
+### Reprodutibilidade em produção (vale para as duas plataformas)
+
+Por padrão `KEYCLOAK_IMAGE_TAG=latest` (flutuante). Para "risco zero" de
+uma atualização inesperada da imagem, trave em produção num `sha-xxxxxxx`
+específico (o pipeline mostra a tag exata publicada no resumo da execução
+— *Actions → run → Summary* no GitHub, no log do job `build-scan-push` no
+GitLab):
+```bash
+# no .env da VM
+KEYCLOAK_IMAGE=<registry usado>
+KEYCLOAK_IMAGE_TAG=sha-1a2b3c4
+```
 
 ---
 
@@ -152,8 +184,8 @@ push falha com `403`.
    ```bash
    ./deploy.sh
    ```
-   Isso puxa a imagem do Keycloak já publicada pelo CI no `ghcr.io` (ver
-   seção "CI/CD e Registry" acima) e sobe tudo — sem buildar nada na VM.
+   Isso puxa a imagem do Keycloak já publicada pelo CI (GitHub ou GitLab,
+   ver seção "CI/CD e Registry" acima) e sobe tudo — sem buildar nada na VM.
    Se o pipeline ainda não rodou nenhuma vez (primeiro deploy antes do
    primeiro `push` para `main`), use `./deploy.sh --build` para buildar
    localmente como alternativa temporária.
