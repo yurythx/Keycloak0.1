@@ -32,11 +32,9 @@ lint:
   before_script:
     - apk add --no-cache shellcheck curl
   script:
-    # -S warning: nao trava em achados "info"/"style" (ex.: SC1091 de source dinamico)
-    - >
-      shellcheck -S warning setup.sh deploy.sh manage.sh docker-entrypoint-secrets.sh
-      scripts/backup.sh scripts/restore_test.sh scripts/configure_ldap.sh
-      scripts/lib/theme.sh scripts/lib/services.sh
+    # Glob em vez de lista manual - um script novo nunca fica de fora
+    # silenciosamente. -S warning: nao trava em achados "info"/"style".
+    - shellcheck -S warning *.sh scripts/*.sh scripts/lib/*.sh
     - curl -sSL -o /usr/local/bin/hadolint https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
     - chmod +x /usr/local/bin/hadolint
     - hadolint Dockerfile

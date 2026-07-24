@@ -129,6 +129,41 @@ ele ativa automaticamente o profile do Portainer (se `ENABLE_PORTAINER=
 true` no `.env`) para que Parar/Iniciar/Reiniciar cubram o Portainer
 também, não só o Keycloak/Postgres/Nginx.
 
+#### Menu automático a cada login (opcional, `scripts/install_console_menu.sh`)
+
+Por padrão o `manage.sh` só aparece quando você roda ele manualmente. Para
+fazer o menu aparecer **automaticamente toda vez que alguém logar na VM**
+(via SSH ou no console local do hypervisor/nuvem) — igual ao console de
+setup do TrueNAS:
+
+```bash
+sudo ./scripts/install_console_menu.sh              # instala
+sudo ./scripts/install_console_menu.sh --uninstall   # remove
+```
+
+Como funciona: instala um hook em `/etc/profile.d/keycloak-manage-menu.sh`,
+que o Linux roda automaticamente em todo **shell de login interativo** —
+isso cobre SSH e o console local com o mesmo mecanismo, sem precisar de
+duas instalações separadas. Escolher **"0) Sair"** no menu não fecha a
+sessão: devolve o terminal pro shell normal, então dá pra fazer qualquer
+outra coisa na VM depois (é um subprocesso, não substitui o shell).
+
+**Sessões não-interativas continuam normais**: `ssh vm "comando"`, `scp`,
+`rsync`, Ansible etc. não passam por `/etc/profile.d` — só shells de
+*login* interativos disparam o hook. Confirmado com um teste real (SSH de
+verdade contra um contêiner com `sshd`, chave pública, antes de subir este
+script): login interativo mostra o menu e depois cai no shell normal;
+`ssh vm "echo x"` não mostra nada; e para pular o menu numa sessão
+específica sem desinstalar:
+```bash
+ssh usuario@vm bash --noprofile --norc
+```
+
+> Requer `sudo` porque grava em `/etc/profile.d/` (fora deste
+> repositório, afeta todo login na VM). É o único script deste projeto
+> que mexe em configuração do sistema — todos os outros vivem inteiramente
+> dentro da pasta do repositório.
+
 ## CI/CD e Registry
 
 **Build fora da VM**: a imagem do Keycloak não é mais construída na VM de
