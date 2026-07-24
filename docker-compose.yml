@@ -1,0 +1,160 @@
+networks:
+  frontend:
+    driver: bridge
+  backend:
+    driver: bridge
+    internal: true # Isola o banco de dados completamente, sem rota de saida para a internet
+
+volumes:
+  postgres_data:
+    driver: local
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  kc_admin_password:
+    file: ./secrets/kc_admin_password.txt
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  # ---------------------------------------------------------------------------
+  # Banco de Dados PostgreSQL
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: keycloak_db
+    restart: unless-stopped
+    networks:
+      - backend
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-keycloak}
+      POSTGRES_USER: ${POSTGRES_USER:-keycloak_user}
+      # Imagem oficial do Postgres suporta _FILE nativamente (diferente do Keycloak)
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+    secrets:
+      - postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    # Tuning de performance do PostgreSQL para carga institucional
+    # (assume VM com min. 8 vCPU / 16GB RAM - ver docs/RUNBOOK.md Etapa 0)
+    command: >
+      postgres
+      -c max_connections=200
+      -c shared_buffers=1GB
+      -c effective_cache_size=3GB
+      -c work_mem=16MB
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-keycloak_user} -d $${POSTGRES_DB:-keycloak}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    logging: *default-logging
+    # Sem "ports:" - Postgres so e alcancavel dentro da rede "backend" (internal: true)
+
+  # ---------------------------------------------------------------------------
+  # Servidor Keycloak (Build Customizado & Otimizado)
+  # ---------------------------------------------------------------------------
+  keycloak:
+    # Imagem publicada pelo pipeline de CI (.github/workflows/ci.yml) no
+    # GitHub Container Registry - "docker compose pull" usa esta imagem.
+    # O bloco "build" abaixo continua existindo como fallback: "docker
+    # compose build" / "deploy.sh --build" builda localmente com a MESMA
+    # tag, para homologacao/dev sem depender do registry.
+    image: ${KEYCLOAK_IMAGE:-ghcr.io/yurythx/keycloak-sso}:${KEYCLOAK_IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: keycloak_server
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - frontend
+      - backend
+    environment:
+      # Conexao com o Banco de Dados
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-keycloak}
+      KC_DB_USERNAME: ${POSTGRES_USER:-keycloak_user}
+      # Resolvido em senha real pelo docker-entrypoint-secrets.sh (ver Dockerfile)
+      KC_DB_PASSWORD_FILE: /run/secrets/postgres_password
+
+      # Admin Bootstrap (criado apenas na primeira inicializacao do realm master)
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KC_BOOTSTRAP_ADMIN_USERNAME:-kc_admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD_FILE: /run/secrets/kc_admin_password
+
+      # Configuracao de Dominio, HTTP e Proxy
+      KC_HOSTNAME: ${KC_HOSTNAME} # Ex: https://auth.prefeitura.gov.br
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_TRUSTED_ADDRESSES: ${PROXY_TRUSTED_ADDRESSES:-172.16.0.0/12}
+
+      # Certificados de Confianca (CA do Active Directory / LDAPS)
+      KC_TRUSTSTORE_PATHS: /opt/keycloak/certs
+
+      # Management interface (health/metrics) - fica em porta separada (9000),
+      # NUNCA publicada no host nem proxiada publicamente pelo Nginx.
+      KC_HEALTH_ENABLED: "true"
+      KC_METRICS_ENABLED: "true"
+
+      # Tuning de Conexoes e Memoria da JVM
+      KC_DB_POOL_INITIAL_SIZE: 20
+      KC_DB_POOL_MAX_SIZE: 100
+      JAVA_OPTS_APPEND: "-Xms2048m -Xmx4096m -XX:+UseG1GC"
+      KC_LOG_LEVEL: ${KC_LOG_LEVEL:-INFO}
+    secrets:
+      - postgres_password
+      - kc_admin_password
+    volumes:
+      - ./certs:/opt/keycloak/certs:ro
+    # Injecao de FQDN/IP do Domain Controller do Active Directory
+    extra_hosts:
+      - "${AD_DC_HOSTNAME}:${AD_DC_IP}"
+    # O Keycloak nao publica portas no host! Comunicacao exclusiva via Nginx na rede frontend.
+    healthcheck:
+      # bash explicito (nao depende de /bin/sh ser bash) contra a management port 9000,
+      # acessada apenas internamente pelo Docker healthcheck - nunca exposta ao host.
+      test:
+        - "CMD-SHELL"
+        - >
+          bash -c 'exec 3<>/dev/tcp/127.0.0.1/9000;
+          echo -e "GET /health/ready HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n" >&3;
+          cat <&3 | grep -q "200 OK"'
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+    mem_limit: 4g
+    cpus: 2.0
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Proxy Reverso Nginx (Unico Ponto de Entrada Externo)
+  # ---------------------------------------------------------------------------
+  nginx:
+    image: nginx:alpine
+    container_name: keycloak_proxy
+    restart: unless-stopped
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
