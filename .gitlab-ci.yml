@@ -62,7 +62,12 @@ build-scan-push:
     - SHA_TAG="sha-${CI_COMMIT_SHORT_SHA}"
     - docker build -t "${IMAGE_NAME}:${SHA_TAG}" -f Dockerfile .
     - curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
-    - trivy image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "${IMAGE_NAME}:${SHA_TAG}"
+    # Relatorio informativo (nao bloqueia) + gate que so' bloqueia em CRITICAL.
+    # HIGH em dependencias de terceiros empacotadas pelo proprio Keycloak
+    # (jackson, netty, drivers JDBC nao usados por nos) e quase impossivel
+    # zerar a cada release do vendor - decisao registrada no RUNBOOK.
+    - trivy image --severity HIGH,CRITICAL --ignore-unfixed "${IMAGE_NAME}:${SHA_TAG}"
+    - trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 "${IMAGE_NAME}:${SHA_TAG}"
     # So' publica em pipeline real (branch default ou tag) - nunca em MR
     - |
       if [ "$CI_PIPELINE_SOURCE" != "merge_request_event" ]; then

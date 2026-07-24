@@ -74,8 +74,24 @@ mesmo repositório:
 2. **Build** — builda a imagem (roda inclusive em Pull Request/Merge
    Request, para pegar erro de build antes do merge).
 3. **Scan de vulnerabilidades** — [Trivy](https://aquasecurity.github.io/trivy/)
-   escaneia a imagem buildada; a pipeline **falha** se houver vulnerabilidade
-   `HIGH` ou `CRITICAL` com correção disponível.
+   escaneia a imagem buildada em dois passos:
+   - **Relatório HIGH+CRITICAL** (informativo, não bloqueia) — fica nos logs
+     do CI pra acompanhamento.
+   - **Gate de segurança** (bloqueia o pipeline) — falha **só** se houver
+     `CRITICAL` com correção disponível.
+   > **Por que não bloquear em HIGH também**: a maior parte dos achados
+   > `HIGH` numa imagem do Keycloak está em bibliotecas Java *de terceiros
+   > empacotadas pelo próprio vendor* (ex.: jackson-databind, netty,
+   > drivers JDBC que nem usamos — o Keycloak empacota driver de SQL
+   > Server mesmo rodando com Postgres). Exigir zero `HIGH` nessas
+   > dependências transitivas travaria o deploy indefinidamente a cada
+   > release do Keycloak, por algo fora do nosso controle direto. `CRITICAL`
+   > é o piso não-negociável; `HIGH` fica **visível e monitorado**, não
+   > bloqueante. Reavalie essa política periodicamente (ex.: a cada
+   > atualização de versão do Keycloak) — decisão tomada em 2026-07-23 após
+   > constatar que a versão `26.0` tinha `CRITICAL` real (CVE-2025-14813,
+   > BouncyCastle) e vários `HIGH` específicos do próprio Keycloak
+   > (autenticação/SAML) corrigidos ao subir para `26.7.0`.
 4. **Push** (só em push/pipeline real na branch principal, nunca em PR/MR)
    — publica com duas tags: `latest` e `sha-<7 chars do commit>`. Numa tag
    `vX.Y.Z`, publica também essa tag de versão.

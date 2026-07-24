@@ -94,10 +94,21 @@ jobs:
           curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
             | sudo sh -s -- -b /usr/local/bin
 
-      - name: Scan de vulnerabilidades (Trivy)
+      - name: Relatorio de vulnerabilidades HIGH+CRITICAL (informativo, nao bloqueia)
         run: |
           trivy image \
             --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            "${IMAGE_NAME}:${{ steps.tags.outputs.sha_tag }}"
+
+      # So' bloqueia em CRITICAL: HIGH em dependencias de terceiros
+      # empacotadas pelo proprio Keycloak (jackson, netty, drivers JDBC
+      # nao usados por nos) e quase impossivel zerar a cada release do
+      # vendor - decisao registrada em docs/RUNBOOK.md, secao CI/CD.
+      - name: Gate de seguranca (bloqueia em CRITICAL)
+        run: |
+          trivy image \
+            --severity CRITICAL \
             --ignore-unfixed \
             --exit-code 1 \
             "${IMAGE_NAME}:${{ steps.tags.outputs.sha_tag }}"
