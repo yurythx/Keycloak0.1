@@ -60,6 +60,7 @@ falhar, imprime os últimos logs automaticamente.
 ./deploy.sh --no-pull         # usa a imagem já em cache local, sem baixar de novo
 ./deploy.sh --configure-ldap  # roda scripts/configure_ldap.sh após a stack subir
 ./deploy.sh --logs            # segue os logs após o deploy ter sucesso
+./deploy.sh --no-menu         # nao abre o ./manage.sh ao final (so' o deploy)
 ./deploy.sh --down            # derruba a stack (preserva o volume do Postgres)
 ./deploy.sh --down --purge    # derruba E apaga o volume do Postgres (destrutivo!)
 ./deploy.sh --timeout 300     # tempo máximo de espera pelos healthchecks (padrão 240s)
@@ -68,6 +69,13 @@ falhar, imprime os últimos logs automaticamente.
 
 O Portainer (se `ENABLE_PORTAINER=true` no `.env`) é ativado/desativado
 automaticamente via profile do Compose — não precisa de flag para isso.
+
+Em **sessão interativa** (terminal de verdade), ao final de um deploy com
+sucesso o [`./manage.sh`](#managesh) abre automaticamente, pra você já
+cair direto no console de gerenciamento. Use `--no-menu` pra desativar
+numa execução específica. Em automação/CI (sem terminal associado) isso
+nunca acontece — a checagem é feita via `[ -t 0 ] && [ -t 1 ]`, então
+scripts e pipelines não ficam presos esperando um menu.
 
 ---
 
@@ -94,7 +102,7 @@ quando o deploy terminou):
 | 6 | Backup agora | Roda `scripts/backup.sh` |
 | 7 | Testar restauração de backup | Roda `scripts/restore_test.sh` |
 | 8 | Configurar LDAP/AD | Roda `scripts/configure_ldap.sh` |
-| 9 | Uso de recursos | `docker stats --no-stream` de todos os contêineres da stack |
+| 9 | Uso de recursos | `docker stats` **ao vivo** (estilo `htop`) de todos os contêineres — atualiza continuamente até `Ctrl+C` |
 | 10 | Shell num contêiner | Abre um shell interativo (`bash`, com fallback pra `sh`) — útil para debug pontual |
 | 11 | Atualizar esta tela | Redesenha o painel sem executar nada |
 | 0 | Sair | Fecha o menu (a stack continua rodando normalmente) |

@@ -18,9 +18,14 @@
 #   ./deploy.sh --configure-ldap roda scripts/configure_ldap.sh apos a stack
 #                                 subir (federacao com o Active Directory)
 #   ./deploy.sh --logs           segue os logs apos o deploy ter sucesso
+#   ./deploy.sh --no-menu        nao abre o ./manage.sh ao final (deploy so')
 #   ./deploy.sh --down           derruba a stack (mantem o volume do Postgres)
 #   ./deploy.sh --down --purge   derruba a stack E remove o volume (destrutivo!)
 #   ./deploy.sh --timeout 300    tempo maximo de espera pelos healthchecks (s)
+#
+# Em sessao interativa (terminal de verdade), ao final de um deploy com
+# sucesso o ./manage.sh abre automaticamente - use --no-menu pra desativar
+# nessa execucao. Em automacao/CI (sem terminal) isso nunca acontece.
 #
 # O Portainer (opcional) e' controlado pelo ENABLE_PORTAINER no .env - ver
 # ./setup.sh ou docs/scripts-referencia.md. Nao precisa de flag aqui.
@@ -40,6 +45,7 @@ DO_LOGS=0
 DO_DOWN=0
 PURGE=0
 DO_LDAP=0
+DO_MENU=1
 TIMEOUT=240
 NO_ANIM=0
 
@@ -49,13 +55,14 @@ while [ $# -gt 0 ]; do
         --no-pull) DO_PULL=0 ;;
         --configure-ldap) DO_LDAP=1 ;;
         --logs) DO_LOGS=1 ;;
+        --no-menu) DO_MENU=0 ;;
         --down) DO_DOWN=1 ;;
         --purge) PURGE=1 ;;
         --yes|-y) ASSUME_YES=1 ;;
         --no-anim) NO_ANIM=1 ;;
         --timeout) shift; TIMEOUT="${1:-240}" ;;
         -h|--help)
-            sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,31p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) die "Argumento desconhecido: $1 (use --help)" ;;
@@ -211,4 +218,12 @@ printf "\n%sDeploy concluido.%s\n\n" "${C_BGREEN}" "${C_RESET}"
 
 if [ "$DO_LOGS" = "1" ]; then
     docker compose logs -f
+fi
+
+# Abre o console de gerenciamento automaticamente em sessao interativa,
+# a menos que --no-menu tenha sido passado ou isso ja tenha sido chamado
+# de dentro do proprio manage.sh (evita menu dentro de menu quando a
+# opcao "Atualizar" do manage.sh chama este script).
+if [ "$DO_MENU" = "1" ] && [ -z "${MANAGE_SH_CONTEXT:-}" ] && [ -t 0 ] && [ -t 1 ] && [ -x ./manage.sh ]; then
+    ./manage.sh
 fi

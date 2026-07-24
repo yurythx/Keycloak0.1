@@ -118,7 +118,9 @@ menu_start() {
 menu_update() {
     confirm "Vai puxar a imagem mais recente do registry e reiniciar o Keycloak. Continuar?" "S" \
         || { log_info "Cancelado"; pause; return; }
-    ./deploy.sh || log_err "deploy.sh terminou com erro - veja a saida acima"
+    # MANAGE_SH_CONTEXT avisa o deploy.sh que ja estamos dentro do menu -
+    # sem isso ele tentaria abrir um ./manage.sh novo ao final, aninhando.
+    MANAGE_SH_CONTEXT=1 ./deploy.sh --no-menu || log_err "deploy.sh terminou com erro - veja a saida acima"
     pause
 }
 
@@ -155,7 +157,9 @@ menu_stats() {
     if [ "${#names[@]}" -eq 0 ]; then
         log_warn "Nenhum contêiner rodando"
     else
-        docker stats --no-stream "${names[@]}"
+        log_info "Modo ao vivo (estilo htop) - Ctrl+C para voltar ao menu"
+        sleep 1
+        docker stats "${names[@]}"
     fi
     pause
 }
