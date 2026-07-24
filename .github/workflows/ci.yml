@@ -106,7 +106,7 @@ jobs:
       # So' bloqueia em CRITICAL: HIGH em dependencias de terceiros
       # empacotadas pelo proprio Keycloak (jackson, netty, drivers JDBC
       # nao usados por nos) e quase impossivel zerar a cada release do
-      # vendor - decisao registrada em docs/RUNBOOK.md, secao CI/CD.
+      # vendor - decisao registrada em docs/ci-cd.md.
       - name: Gate de seguranca (bloqueia em CRITICAL)
         run: |
           trivy image \

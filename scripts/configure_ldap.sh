@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # =============================================================================
-# configure_ldap.sh - Federacao com o Active Directory via LDAPS (Etapa 3
-# do RUNBOOK), automatizada via kcadm.sh (CLI admin do proprio Keycloak).
+# configure_ldap.sh - Federacao com o Active Directory via LDAPS
+# (docs/03-federacao-ad.md), automatizada via kcadm.sh (CLI admin do
+# proprio Keycloak).
 #
 # Idempotente: se o provider LDAP e o mapper de grupo ja existirem (mesmo
 # nome), atualiza em vez de duplicar. Pode ser chamado direto ou via
@@ -104,7 +105,7 @@ if kcadm get "realms/${REALM_V}" >/dev/null 2>&1; then
 else
     kcadm create realms -s "realm=${REALM_V}" -s enabled=true >/dev/null
     log_ok "Realm '${REALM_V}' criado"
-    log_warn "Realm novo - grupos/clients da Etapa 2 do RUNBOOK ainda precisam ser criados a parte"
+    log_warn "Realm novo - grupos/clients da Etapa 2 (docs/02-configuracao-keycloak.md) ainda precisam ser criados a parte"
 fi
 
 # -----------------------------------------------------------------------------
@@ -191,6 +192,6 @@ print_panel "FEDERACAO LDAP CONFIGURADA" \
     "Groups DN: ${GROUPS_DN_V}" \
     "" \
     "Confira em: Admin Console -> ${REALM_V} -> Users" \
-    "Portoes de validacao completos: docs/RUNBOOK.md (Etapa 3)"
+    "Portoes de validacao completos: docs/03-federacao-ad.md"
 
 printf "\n%sFederacao LDAP concluida.%s\n\n" "${C_BGREEN}" "${C_RESET}"

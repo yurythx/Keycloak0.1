@@ -43,7 +43,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     # Tuning de performance do PostgreSQL para carga institucional
-    # (assume VM com min. 8 vCPU / 16GB RAM - ver docs/RUNBOOK.md Etapa 0)
+    # (assume VM com min. 8 vCPU / 16GB RAM - ver docs/00-pre-requisitos.md)
     command: >
       postgres
       -c max_connections=200
@@ -165,7 +165,7 @@ services:
   # Portainer (opcional - gerenciador visual do Docker)
   # ---------------------------------------------------------------------------
   # So sobe com o profile "portainer" ativo (deploy.sh le ENABLE_PORTAINER
-  # do .env e ativa/desativa automaticamente - ver docs/RUNBOOK.md).
+  # do .env e ativa/desativa automaticamente - ver docs/scripts-referencia.md).
   #
   # ATENCAO: o Portainer precisa de acesso de LEITURA E ESCRITA ao socket
   # do Docker do host para funcionar - isso equivale a acesso root na VM

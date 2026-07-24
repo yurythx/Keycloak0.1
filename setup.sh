@@ -3,7 +3,7 @@
 # setup.sh - Provisionamento inicial da stack Keycloak (SSO da Prefeitura)
 #
 # Idempotente: pode ser executado mais de uma vez sem sobrescrever segredos
-# ou certificados ja existentes. Ver docs/RUNBOOK.md (Etapa 0 e Etapa 1).
+# ou certificados ja existentes. Ver docs/00-pre-requisitos.md e docs/01-provisionamento.md.
 #
 # Uso:
 #   ./setup.sh                 modo interativo (recomendado)
@@ -109,7 +109,7 @@ KEYCLOAK_IMAGE=ghcr.io/yurythx/keycloak-sso
 KEYCLOAK_IMAGE_TAG=latest
 
 # Portainer (opcional). PORTAINER_BIND=127.0.0.1 so' permite acesso via
-# SSH tunnel/VPN - mude com cuidado (ver docs/RUNBOOK.md).
+# SSH tunnel/VPN - mude com cuidado (ver docs/scripts-referencia.md).
 ENABLE_PORTAINER=${ENABLE_PORTAINER_V}
 PORTAINER_BIND=127.0.0.1
 EOF
@@ -121,7 +121,7 @@ step "Gerando segredos (32 caracteres alfanumericos)"
 # -----------------------------------------------------------------------------
 # Alfanumerico puro (sem +, / ou =) de proposito: segredos base64 "crus"
 # quebram testes com 'curl -d' sem --data-urlencode (o '+' vira espaco).
-# Ver docs/RUNBOOK.md, nota na Etapa 2.
+# Ver docs/02-configuracao-keycloak.md.
 gen_secret() {
     openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32
 }
@@ -158,7 +158,7 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-step "CA do Active Directory (necessaria na Etapa 3 do RUNBOOK)"
+step "CA do Active Directory (necessaria na Etapa 3, docs/03-federacao-ad.md)"
 # -----------------------------------------------------------------------------
 if [ -s certs/ad-ca.pem ]; then
     log_ok "certs/ad-ca.pem presente"
@@ -185,6 +185,6 @@ print_panel "RESUMO DO SETUP" \
     "Portainer ............... ${STATUS_PORTAINER}" \
     "" \
     "Proximo passo: ./deploy.sh" \
-    "Referencia completa: docs/RUNBOOK.md"
+    "Referencia completa: docs/README.md"
 
 printf "\n%sSetup concluido.%s\n\n" "${C_BGREEN}" "${C_RESET}"

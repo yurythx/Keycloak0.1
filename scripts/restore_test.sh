@@ -1,5 +1,5 @@
 #!/bin/bash
-# Drill de restauracao (Etapa 5 do RUNBOOK): restaura um backup em um
+# Drill de restauracao (docs/05-golive-operacao.md): restaura um backup em um
 # container Postgres descartavel e isolado, para validar a integridade
 # da copia SEM tocar no banco de producao.
 #

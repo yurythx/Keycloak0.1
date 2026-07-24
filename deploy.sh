@@ -3,7 +3,7 @@
 # deploy.sh - Sobe/atualiza a stack Keycloak (SSO da Prefeitura)
 #
 # Pre-requisito: rodar ./setup.sh pelo menos uma vez antes.
-# Ver docs/RUNBOOK.md (Etapa 1 - Portoes de Validacao).
+# Ver docs/01-provisionamento.md (Portoes de Validacao).
 #
 # Modo padrao (producao): puxa a imagem do Keycloak ja construida e
 # escaneada pelo CI (.github/workflows/ci.yml) do GitHub Container Registry
@@ -23,7 +23,7 @@
 #   ./deploy.sh --timeout 300    tempo maximo de espera pelos healthchecks (s)
 #
 # O Portainer (opcional) e' controlado pelo ENABLE_PORTAINER no .env - ver
-# ./setup.sh ou docs/RUNBOOK.md. Nao precisa de flag aqui.
+# ./setup.sh ou docs/scripts-referencia.md. Nao precisa de flag aqui.
 # =============================================================================
 set -euo pipefail
 
@@ -128,7 +128,7 @@ elif [ "$DO_PULL" = "1" ]; then
         log_err "Falha ao puxar as imagens."
         log_err "Se a imagem do Keycloak for privada no GitHub Container Registry, rode:"
         log_err "  echo \$GH_TOKEN | docker login ghcr.io -u <usuario> --password-stdin"
-        log_err "(ou torne o pacote publico - ver docs/RUNBOOK.md, secao CI/CD e Registry)"
+        log_err "(ou torne o pacote publico - ver docs/ci-cd.md)"
         die "Pull cancelado"
     fi
     log_ok "Pull concluido"
@@ -176,7 +176,7 @@ fi
 if [ "$FAILED" = "1" ]; then
     step "Falha no deploy - ultimas linhas de log dos serviços"
     docker compose logs --tail=50
-    die "Deploy falhou. Verifique os logs acima e docs/RUNBOOK.md (Etapa 1)."
+    die "Deploy falhou. Verifique os logs acima e docs/01-provisionamento.md."
 fi
 
 # -----------------------------------------------------------------------------
@@ -205,7 +205,7 @@ print_panel "RESUMO DO DEPLOY" \
     "Portainer: $([ "$PORTAINER_ON" = "1" ] && echo "ativado" || echo "desativado")" \
     "" \
     "Gerenciar a stack (logs, reiniciar, backup...): ./manage.sh" \
-    "Proximos portoes de validacao: docs/RUNBOOK.md (Etapa 1 em diante)"
+    "Proximos portoes de validacao: docs/README.md"
 
 printf "\n%sDeploy concluido.%s\n\n" "${C_BGREEN}" "${C_RESET}"
 
