@@ -25,17 +25,19 @@ pré-voo e sem nenhuma ação destrutiva por padrão:
   ./setup.sh --self-signed   # gera cert de teste (NUNCA em produção)
   ```
 - **`./deploy.sh`** — roda as checagens de pré-voo, puxa a imagem do
-  Keycloak já construída e escaneada pelo CI, faz `up -d` e aguarda os três
-  contêineres ficarem `healthy` (com timeout), mostrando um painel final com
-  status, origem da imagem e URLs. Se algo falhar, imprime os últimos logs
-  automaticamente.
+  Keycloak já construída e escaneada pelo CI, faz `up -d` (incluindo o
+  Portainer, se habilitado) e aguarda os contêineres ficarem `healthy` (com
+  timeout). Ao final, mostra um **painel de serviços** (nome, status, URL
+  de acesso e IP:porta interno de cada contêiner) e um resumo do deploy. Se
+  algo falhar, imprime os últimos logs automaticamente.
   ```bash
-  ./deploy.sh                 # modo producao: pull do registry (KEYCLOAK_IMAGE) + up -d
-  ./deploy.sh --build          # builda a imagem localmente (dev/homologacao)
-  ./deploy.sh --no-pull        # usa a imagem ja em cache local, sem baixar de novo
-  ./deploy.sh --down          # derruba a stack (preserva o volume do DB)
-  ./deploy.sh --down --purge  # derruba E apaga o volume do Postgres (destrutivo)
-  ./deploy.sh --help          # todas as opções
+  ./deploy.sh                  # modo producao: pull do registry (KEYCLOAK_IMAGE) + up -d
+  ./deploy.sh --build           # builda a imagem localmente (dev/homologacao)
+  ./deploy.sh --no-pull         # usa a imagem ja em cache local, sem baixar de novo
+  ./deploy.sh --configure-ldap  # roda scripts/configure_ldap.sh apos a stack subir
+  ./deploy.sh --down           # derruba a stack (preserva o volume do DB)
+  ./deploy.sh --down --purge   # derruba E apaga o volume do Postgres (destrutivo)
+  ./deploy.sh --help           # todas as opções
   ```
 
 > O bit de execução dos scripts é versionado no próprio git (modo 755
@@ -47,6 +49,51 @@ pré-voo e sem nenhuma ação destrutiva por padrão:
 Os comandos manuais abaixo em cada etapa continuam documentados como
 referência/fallback, mas o caminho recomendado é sempre `./setup.sh`
 seguido de `./deploy.sh`.
+
+### Portainer (opcional)
+
+`./setup.sh` pergunta se quer subir o Portainer (gerenciador visual do
+Docker) e grava a resposta em `ENABLE_PORTAINER` no `.env` — `./deploy.sh`
+lê essa variável e ativa/desativa o serviço automaticamente a cada deploy
+(profile do Compose, sem precisar lembrar de nenhuma flag).
+
+> **Atenção de segurança**: o Portainer precisa de acesso de leitura e
+> escrita ao socket do Docker do host pra funcionar — isso equivale a
+> acesso root na VM (quem controla o Docker controla todos os contêineres,
+> inclusive o do Postgres). Por isso o bind padrão é `PORTAINER_BIND=
+> 127.0.0.1` — só acessível via SSH tunnel ou VPN da prefeitura:
+> ```bash
+> ssh -L 9443:127.0.0.1:9443 usuario@vm-da-prefeitura
+> # depois acesse https://localhost:9443 no seu navegador
+> ```
+> Só mude `PORTAINER_BIND` para `0.0.0.0` (expõe na rede) se o firewall da
+> prefeitura já filtrar quem chega na porta 9443 — nunca exponha direto na
+> internet.
+
+No primeiro acesso, o Portainer pede pra você criar o usuário admin dele
+(senha própria, separada da do Keycloak) e usa um certificado autoassinado
+que ele mesmo gera — o aviso de segurança do navegador nesse primeiro
+acesso é esperado.
+
+### Federação LDAP/AD automatizada (`scripts/configure_ldap.sh`)
+
+Automatiza a Etapa 3 (federação com o Active Directory) via `kcadm.sh` (CLI
+administrativo do próprio Keycloak, chamado por dentro do contêiner —
+não expõe nenhuma porta administrativa extra). Idempotente: rodar de novo
+atualiza a configuração existente em vez de duplicar.
+```bash
+./deploy.sh --configure-ldap        # roda depois da stack subir healthy
+./scripts/configure_ldap.sh         # ou direto, se a stack ja estiver no ar
+```
+Pergunta interativamente realm, Connection URL, Bind DN, senha da conta de
+bind (gravada em `secrets/ldap_bind_password.txt`, nunca em texto plano no
+`.env`), Users DN e Groups DN — com valores padrão derivados de
+`AD_DOMAIN`/`AD_DC_HOSTNAME` do `.env`. Cria o provider LDAP (vendor AD,
+`READ_ONLY`, LDAPS) e o `group-ldap-mapper`, depois dispara o
+"Synchronize all users". Os portões de validação completos (Test
+Connection, Test Authentication, login real de um servidor) continuam os
+da Etapa 3 abaixo — o script cobre a criação/atualização da configuração,
+não substitui a validação manual final.
 
 ## CI/CD e Registry
 
@@ -263,18 +310,25 @@ KEYCLOAK_IMAGE_TAG=sha-1a2b3c4
 
 ## Etapa 3 — Federação de Identidades com o Active Directory (LDAPS)
 
+> **Caminho recomendado**: `./deploy.sh --configure-ldap` (ou
+> `./scripts/configure_ldap.sh` com a stack já no ar) automatiza as ações
+> 2 e 3 abaixo via `kcadm.sh` — ver seção "Federação LDAP/AD automatizada"
+> no topo deste documento. A ação 1 (copiar a CA) e o portão de validação
+> continuam manuais.
+
 ### Ações
 1. Copiar a CA raiz do AD para `./certs/ad-ca.pem` e reiniciar o Keycloak
    para recarregar o truststore:
    ```bash
    docker compose restart keycloak
    ```
-2. Admin Console → realm `prefeitura` → **User Federation → Add LDAP**:
+2. Rodar `./scripts/configure_ldap.sh` (recomendado) **ou**, manualmente,
+   Admin Console → realm `prefeitura` → **User Federation → Add LDAP**:
    - Connection URL: `ldaps://dc01.prefeitura.local:636`
    - Bind DN: `CN=svc-keycloak,OU=ServiceAccounts,DC=prefeitura,DC=local`
    - Edit Mode: `READ_ONLY`
-3. Adicionar o mapper `group-ldap-mapper` apontando para
-   `OU=Grupos,DC=prefeitura,DC=local`.
+3. Se feito manualmente, adicionar o mapper `group-ldap-mapper` apontando
+   para `OU=Grupos,DC=prefeitura,DC=local` (o script já faz isso).
 
 ### Portão de Validação
 - [ ] **Test Connection**: sucesso, sem erro de PKIX/certificado.

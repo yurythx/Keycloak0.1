@@ -15,10 +15,15 @@
 #   ./deploy.sh --build          builda a imagem localmente em vez de puxar
 #                                 (dev/homologacao sem acesso ao registry)
 #   ./deploy.sh --no-pull        pula o "docker compose pull" (usa cache local)
+#   ./deploy.sh --configure-ldap roda scripts/configure_ldap.sh apos a stack
+#                                 subir (federacao com o Active Directory)
 #   ./deploy.sh --logs           segue os logs apos o deploy ter sucesso
 #   ./deploy.sh --down           derruba a stack (mantem o volume do Postgres)
 #   ./deploy.sh --down --purge   derruba a stack E remove o volume (destrutivo!)
 #   ./deploy.sh --timeout 300    tempo maximo de espera pelos healthchecks (s)
+#
+# O Portainer (opcional) e' controlado pelo ENABLE_PORTAINER no .env - ver
+# ./setup.sh ou docs/RUNBOOK.md. Nao precisa de flag aqui.
 # =============================================================================
 set -euo pipefail
 
@@ -32,6 +37,7 @@ DO_PULL=1
 DO_LOGS=0
 DO_DOWN=0
 PURGE=0
+DO_LDAP=0
 TIMEOUT=240
 NO_ANIM=0
 
@@ -39,6 +45,7 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --build) DO_BUILD=1 ;;
         --no-pull) DO_PULL=0 ;;
+        --configure-ldap) DO_LDAP=1 ;;
         --logs) DO_LOGS=1 ;;
         --down) DO_DOWN=1 ;;
         --purge) PURGE=1 ;;
@@ -46,7 +53,7 @@ while [ $# -gt 0 ]; do
         --no-anim) NO_ANIM=1 ;;
         --timeout) shift; TIMEOUT="${1:-240}" ;;
         -h|--help)
-            sed -n '2,21p' "$0" | sed 's/^# \{0,1\}//'
+            sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'
             exit 0
             ;;
         *) die "Argumento desconhecido: $1 (use --help)" ;;
@@ -81,6 +88,18 @@ fi
 
 docker compose config --quiet || die "docker-compose.yml invalido (veja o erro acima)"
 log_ok "docker-compose.yml validado (docker compose config)"
+
+# Portainer e' um profile do compose - ativado via ENABLE_PORTAINER no .env
+# (setup.sh pergunta isso). Exportado uma vez aqui pra todo "docker compose"
+# do resto do script (pull/build/up/down) enxergar o mesmo profile.
+PORTAINER_ON=0
+if grep -qE '^ENABLE_PORTAINER=true' .env 2>/dev/null; then
+    PORTAINER_ON=1
+    export COMPOSE_PROFILES=portainer
+    log_ok "Portainer habilitado (ENABLE_PORTAINER=true no .env)"
+else
+    log_info "Portainer desativado (ENABLE_PORTAINER=false/ausente no .env)"
+fi
 
 # -----------------------------------------------------------------------------
 if [ "$DO_DOWN" = "1" ]; then
@@ -148,6 +167,9 @@ FAILED=0
 for c in keycloak_db keycloak_server keycloak_proxy; do
     wait_healthy "$c" || FAILED=1
 done
+if [ "$PORTAINER_ON" = "1" ]; then
+    wait_healthy "portainer" || FAILED=1
+fi
 
 if [ "$FAILED" = "1" ]; then
     step "Falha no deploy - ultimas linhas de log dos serviços"
@@ -156,20 +178,51 @@ if [ "$FAILED" = "1" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+step "Configuracao LDAP/AD (opcional)"
+if [ "$DO_LDAP" = "1" ]; then
+    if [ -x scripts/configure_ldap.sh ]; then
+        ./scripts/configure_ldap.sh || log_warn "configure_ldap.sh terminou com erro - stack continua no ar, veja a saida acima"
+    else
+        log_err "scripts/configure_ldap.sh nao encontrado ou sem permissao de execucao"
+    fi
+else
+    log_info "Pulado (use --configure-ldap para rodar a federacao com o Active Directory)"
+fi
+
+# -----------------------------------------------------------------------------
+step "Painel de servicos"
+container_ip() {
+    docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$1" 2>/dev/null | awk '{print $1}'
+}
+host_ip() {
+    hostname -I 2>/dev/null | awk '{print $1}' || true
+}
+
 KC_HOSTNAME_V="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+HOST_IP_V="$(host_ip)"
+HOST_IP_V="${HOST_IP_V:-<IP-da-VM>}"
+KEYCLOAK_IP_V="$(container_ip keycloak_server)"
+POSTGRES_IP_V="$(container_ip keycloak_db)"
+
+print_table_title "STACK NO AR"
+table_row "nginx"     "healthy" "${KC_HOSTNAME_V:-https://<KC_HOSTNAME>}"       "${HOST_IP_V}:80,443"
+table_row "keycloak"  "healthy" "${KC_HOSTNAME_V:-https://<KC_HOSTNAME>}/admin" "${KEYCLOAK_IP_V:-?}:8080 (interno)"
+table_row "postgres"  "healthy" "sem acesso externo"                           "${POSTGRES_IP_V:-?}:5432 (interno)"
+if [ "$PORTAINER_ON" = "1" ]; then
+    PORTAINER_BIND_V="$(grep -E '^PORTAINER_BIND=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+    PORTAINER_IP_V="$(container_ip portainer)"
+    table_row "portainer" "healthy" "https://${PORTAINER_BIND_V:-127.0.0.1}:9443" "${PORTAINER_IP_V:-?}:9443"
+fi
+print_table_footer
+
 if [ "$DO_BUILD" = "1" ]; then
     IMAGE_SRC_V="build local (dev/homologacao)"
 else
     IMAGE_SRC_V="$(grep -E '^KEYCLOAK_IMAGE=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r'):$(grep -E '^KEYCLOAK_IMAGE_TAG=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
 fi
-print_panel "DEPLOY CONCLUIDO COM SUCESSO" \
-    "keycloak_db ..... healthy" \
-    "keycloak_server . healthy" \
-    "keycloak_proxy .. healthy" \
-    "" \
+print_panel "RESUMO DO DEPLOY" \
     "Imagem do Keycloak: ${IMAGE_SRC_V}" \
-    "URL: ${KC_HOSTNAME_V:-https://<KC_HOSTNAME>}" \
-    "Admin console: ${KC_HOSTNAME_V:-https://<KC_HOSTNAME>}/admin" \
+    "Portainer: $([ "$PORTAINER_ON" = "1" ] && echo "ativado" || echo "desativado")" \
     "" \
     "Proximos portoes de validacao: docs/RUNBOOK.md (Etapa 1 em diante)"
 

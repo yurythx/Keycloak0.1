@@ -8,6 +8,8 @@ networks:
 volumes:
   postgres_data:
     driver: local
+  portainer_data:
+    driver: local
 
 secrets:
   postgres_password:
@@ -157,4 +159,33 @@ services:
       interval: 15s
       timeout: 5s
       retries: 3
+    logging: *default-logging
+
+  # ---------------------------------------------------------------------------
+  # Portainer (opcional - gerenciador visual do Docker)
+  # ---------------------------------------------------------------------------
+  # So sobe com o profile "portainer" ativo (deploy.sh le ENABLE_PORTAINER
+  # do .env e ativa/desativa automaticamente - ver docs/RUNBOOK.md).
+  #
+  # ATENCAO: o Portainer precisa de acesso de LEITURA E ESCRITA ao socket
+  # do Docker do host para funcionar - isso equivale a acesso root na VM
+  # (quem controla o Docker controla tudo, inclusive o container do
+  # Postgres). Por isso o bind padrao e' 127.0.0.1 (so acessivel via SSH
+  # tunnel/VPN), nunca exposto direto na internet por padrao.
+  portainer:
+    image: portainer/portainer-ce:lts
+    container_name: portainer
+    restart: unless-stopped
+    profiles: ["portainer"]
+    networks:
+      - frontend
+    ports:
+      - "${PORTAINER_BIND:-127.0.0.1}:9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    # Sem healthcheck: a imagem oficial do Portainer e' baseada em "scratch"
+    # (sem shell, sem wget/curl) - nao ha nada executavel para um CMD/
+    # CMD-SHELL rodar dentro do container. deploy.sh trata a ausencia de
+    # healthcheck como "container rodando" (ver scripts/deploy.sh, wait_healthy).
     logging: *default-logging

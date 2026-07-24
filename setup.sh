@@ -81,6 +81,11 @@ else
     AD_DC_IP_V=$(ask "IP do Domain Controller" "192.168.1.10")
     KC_LOG_LEVEL_V=$(ask "Nivel de log do Keycloak" "INFO")
 
+    ENABLE_PORTAINER_V="false"
+    if confirm "Subir o Portainer junto (gerenciador visual do Docker, so' acessivel via 127.0.0.1:9443/SSH tunnel por padrao)?" "N"; then
+        ENABLE_PORTAINER_V="true"
+    fi
+
     cat > .env <<EOF
 # Gerado por setup.sh em $(date '+%F %T')
 POSTGRES_DB=${POSTGRES_DB_V}
@@ -102,6 +107,11 @@ KC_LOG_LEVEL=${KC_LOG_LEVEL_V}
 # em vez de "latest".
 KEYCLOAK_IMAGE=ghcr.io/yurythx/keycloak-sso
 KEYCLOAK_IMAGE_TAG=latest
+
+# Portainer (opcional). PORTAINER_BIND=127.0.0.1 so' permite acesso via
+# SSH tunnel/VPN - mude com cuidado (ver docs/RUNBOOK.md).
+ENABLE_PORTAINER=${ENABLE_PORTAINER_V}
+PORTAINER_BIND=127.0.0.1
 EOF
     log_ok ".env preenchido"
 fi
@@ -165,11 +175,14 @@ STATUS_CERT="OK"
 if [ ! -s nginx/certs/fullchain.pem ] || [ ! -s nginx/certs/privkey.pem ]; then
     STATUS_CERT="PENDENTE"
 fi
+STATUS_PORTAINER="desativado"
+grep -qE '^ENABLE_PORTAINER=true' .env 2>/dev/null && STATUS_PORTAINER="ativado (127.0.0.1:9443)"
 
 print_panel "RESUMO DO SETUP" \
     ".env ................... ${STATUS_ENV}" \
     "secrets/*.txt ........... ${STATUS_SECRETS}" \
     "nginx/certs/*.pem ....... ${STATUS_CERT}" \
+    "Portainer ............... ${STATUS_PORTAINER}" \
     "" \
     "Proximo passo: ./deploy.sh" \
     "Referencia completa: docs/RUNBOOK.md"

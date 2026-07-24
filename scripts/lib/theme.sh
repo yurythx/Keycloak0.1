@@ -101,6 +101,18 @@ ask() {
     printf "%s" "${ans:-$default}"
 }
 
+# ask_secret "pergunta" -> devolve resposta via stdout, sem ecoar no terminal
+ask_secret() {
+    local prompt="$1" ans
+    if [ "${ASSUME_YES:-0}" = "1" ] || [ ! -t 0 ]; then
+        printf ""
+        return 0
+    fi
+    read -r -s -p "  ${C_CYAN}?${C_RESET} ${prompt}: " ans
+    printf "\n" >&2
+    printf "%s" "$ans"
+}
+
 print_panel() {
     # print_panel "TITULO" "linha1" "linha2" ...
     local title="$1"; shift
@@ -109,4 +121,29 @@ print_panel() {
         printf "%s│%s %s\n" "${C_GREEN}" "${C_RESET}" "${line}"
     done
     printf "%s└────────────────────────────────────────────────────────────%s\n" "${C_GREEN}" "${C_RESET}"
+}
+
+# --- painel de servicos (estilo "dashboard", tipo TrueNAS) -----------------
+TABLE_RULE="────────────────────────────────────────────────────────────────────────────────────"
+
+print_table_title() {
+    printf "\n%s%s%s\n" "${C_DIM}" "${TABLE_RULE}" "${C_RESET}"
+    printf "  %s%s%s\n" "${C_WHITE}" "$1" "${C_RESET}"
+    printf "%s%s%s\n" "${C_DIM}" "${TABLE_RULE}" "${C_RESET}"
+    printf "  %-15s %-10s %-42s %-20s\n" "SERVICO" "STATUS" "ACESSO" "REDE INTERNA"
+    printf "  %s%s%s\n" "${C_DIM}" "${TABLE_RULE}" "${C_RESET}"
+}
+
+# table_row <nome> <status> <acesso> <rede-interna>
+table_row() {
+    local name="$1" status="$2" access="$3" internal="$4" status_color="${C_GREEN}"
+    case "$status" in
+        healthy|ok|ativo) status_color="${C_GREEN}" ;;
+        *) status_color="${C_YELLOW}" ;;
+    esac
+    printf "  %-15s %s%-10s%s %-42s %-20s\n" "$name" "$status_color" "$status" "${C_RESET}" "$access" "$internal"
+}
+
+print_table_footer() {
+    printf "%s%s%s\n" "${C_DIM}" "${TABLE_RULE}" "${C_RESET}"
 }
