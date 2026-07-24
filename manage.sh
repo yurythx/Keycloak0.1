@@ -89,11 +89,18 @@ menu_logs() {
 menu_restart() {
     local svc
     svc="$(pick_service "Reiniciar qual servico?" 1)" || { pause; return; }
+    # "up -d" em vez de "restart": "restart" reusa o container existente
+    # com o ambiente que ele ja tinha na memoria, IGNORANDO qualquer
+    # mudanca feita no .env desde entao (achado real em producao: troca
+    # de dominio no .env + restart = continuou redirecionando pro
+    # dominio antigo). "up -d" recria o container so' se algo no config
+    # efetivo mudou - se nada mudou, e' um no-op seguro, entao serve tanto
+    # pra "so' reiniciar" quanto pra "aplicar mudanca do .env".
     if [ "$svc" = "__ALL__" ]; then
         confirm "Reiniciar TODOS os servicos?" "N" || { log_info "Cancelado"; pause; return; }
-        if docker compose restart; then log_ok "Todos os servicos reiniciados"; else log_err "Falha ao reiniciar"; fi
+        if docker compose up -d --force-recreate; then log_ok "Todos os servicos reiniciados"; else log_err "Falha ao reiniciar"; fi
     else
-        if docker compose restart "$svc"; then log_ok "'${svc}' reiniciado"; else log_err "Falha ao reiniciar '${svc}'"; fi
+        if docker compose up -d --force-recreate "$svc"; then log_ok "'${svc}' reiniciado"; else log_err "Falha ao reiniciar '${svc}'"; fi
     fi
     pause
 }

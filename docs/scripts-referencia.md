@@ -95,7 +95,7 @@ quando o deploy terminou):
 | # | Opção | O que faz |
 |---|---|---|
 | 1 | Ver logs | Escolhe um serviço (ou todos) e segue os logs (`Ctrl+C` volta ao menu) |
-| 2 | Reiniciar um serviço | `docker compose restart` num serviço específico ou em todos |
+| 2 | Reiniciar um serviço | `docker compose up -d --force-recreate` num serviço específico ou em todos — recria o contêiner (não é um `restart` simples), então também aplica qualquer mudança feita no `.env` desde a última subida |
 | 3 | Parar a stack | `docker compose stop` — mantém os dados, sobe rápido de novo |
 | 4 | Iniciar a stack | `docker compose start` (contêineres já criados) |
 | 5 | Atualizar | Roda `./deploy.sh` (pull da imagem mais recente + redeploy) |
@@ -111,6 +111,17 @@ Só para uso interativo num terminal de verdade (não roda em CI/automação
 — para isso use `deploy.sh` direto). Ativa automaticamente o profile do
 Portainer (se habilitado) para que Parar/Iniciar/Reiniciar cubram o
 Portainer também, não só o Keycloak/Postgres/Nginx.
+
+> **`docker compose restart` vs `docker compose up -d` — pegadinha real**:
+> `restart` reusa o contêiner que já existe, com o ambiente que ele já
+> tinha carregado na memória desde que subiu — **não relê o `.env`**. Se
+> você editou o `.env` (ex.: trocou `KC_HOSTNAME`) e só der `restart`, a
+> mudança **não** é aplicada, mesmo o contêiner reiniciando sem erro. Use
+> sempre `docker compose up -d` (ou `./deploy.sh`, ou a opção 2 do
+> `manage.sh`) depois de editar o `.env` — `up -d` recria o contêiner só
+> se algo no config efetivo mudou (senão é um no-op seguro). Achado real
+> em produção: trocar `KC_HOSTNAME` no `.env` e dar `restart` deixou o
+> Keycloak redirecionando pro domínio antigo indefinidamente.
 
 ### `scripts/install_console_menu.sh`
 
