@@ -126,15 +126,35 @@ gen_secret() {
     openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32
 }
 
+# O Keycloak (e o Postgres) rodam como usuario nao-root dentro do
+# container, mas com GID 0 (grupo "root") - convencao tipo OpenShift
+# (confirmado: uid=1000(keycloak) gid=0(root)). O "secrets:" do Docker
+# Compose fora do modo Swarm e' um bind mount simples - ele NAO remapeia
+# dono/grupo, preserva exatamente a permissao que o arquivo tem no HOST.
+# Por isso o arquivo precisa ser legivel pelo grupo 0, senao o container
+# recebe "Permission denied" ao ler /run/secrets/* (achado real: stack
+# quebrou em producao com os arquivos em 600/root:root, ilegiveis pelo
+# processo do Keycloak). 640 + grupo 0 resolve sem tornar o arquivo
+# legivel por qualquer usuario do host (evita ir ate 644/world-readable).
+fix_secret_perms() {
+    local file="$1"
+    if chgrp 0 "$file" 2>/dev/null; then
+        chmod 640 "$file"
+    else
+        chmod 644 "$file"
+        log_warn "$(basename "$file"): nao foi possivel ajustar o grupo para 0 (root) - usando 644"
+    fi
+}
+
 make_secret_file() {
     local file="$1" label="$2"
     if [ -s "$file" ]; then
-        log_info "${label} ja existe em ${file} - mantendo (nao sobrescrito)"
+        log_info "${label} ja existe em ${file} - mantendo valor atual (so ajustando permissao)"
     else
         gen_secret > "$file"
-        chmod 600 "$file"
-        log_ok "${label} gerado -> ${file} (600, 32 chars)"
+        log_ok "${label} gerado -> ${file} (32 chars)"
     fi
+    fix_secret_perms "$file"
 }
 
 make_secret_file "secrets/postgres_password.txt" "Senha do Postgres"
