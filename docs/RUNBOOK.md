@@ -8,10 +8,10 @@ com Intranet (Django), GLPI e Zabbix.
 anterior tenha passado. Se um portão falhar, pare, corrija a causa raiz e
 repita a validação — não pule etapas.
 
-## Scripts de automação (`./setup.sh` e `./deploy.sh`)
+## Scripts de automação (`./setup.sh`, `./deploy.sh` e `./manage.sh`)
 
 O provisionamento inicial e a subida da stack (Etapa 1) são automatizados
-por dois scripts na raiz do repositório — idempotentes, com checagens de
+por scripts na raiz do repositório — idempotentes, com checagens de
 pré-voo e sem nenhuma ação destrutiva por padrão:
 
 - **`./setup.sh`** — prepara o terreno: valida Docker/Compose/openssl, cria
@@ -94,6 +94,40 @@ bind (gravada em `secrets/ldap_bind_password.txt`, nunca em texto plano no
 Connection, Test Authentication, login real de um servidor) continuam os
 da Etapa 3 abaixo — o script cobre a criação/atualização da configuração,
 não substitui a validação manual final.
+
+### Console de gerenciamento (`./manage.sh`)
+
+Menu interativo (estilo o console de setup do TrueNAS) para operar a stack
+no dia a dia, sem precisar decorar comandos `docker compose`:
+
+```bash
+./manage.sh
+```
+
+A cada tela, mostra o banner e o **painel de serviços com status ao vivo**
+(o mesmo do fim do `deploy.sh`, mas consultado na hora — reflete o estado
+real, não uma foto de quando o deploy terminou). Opções do menu:
+
+| # | Opção | O que faz |
+|---|---|---|
+| 1 | Ver logs | Escolhe um serviço (ou todos) e segue os logs (`Ctrl+C` volta ao menu) |
+| 2 | Reiniciar um serviço | `docker compose restart` num serviço específico ou em todos |
+| 3 | Parar a stack | `docker compose stop` — mantém os dados, sobe rápido de novo |
+| 4 | Iniciar a stack | `docker compose start` (containers já criados) |
+| 5 | Atualizar | Roda `./deploy.sh` (pull da imagem mais recente + redeploy) |
+| 6 | Backup agora | Roda `scripts/backup.sh` |
+| 7 | Testar restauração de backup | Roda `scripts/restore_test.sh` |
+| 8 | Configurar LDAP/AD | Roda `scripts/configure_ldap.sh` |
+| 9 | Uso de recursos | `docker stats --no-stream` de todos os contêineres da stack |
+| 10 | Shell num contêiner | Abre um shell interativo (`bash`, com fallback pra `sh`) num contêiner à escolha — útil para debug pontual |
+| 11 | Atualizar esta tela | Redesenha o painel sem executar nada |
+| 0 | Sair | Fecha o menu (a stack continua rodando normalmente) |
+
+`manage.sh` é só para uso interativo num terminal de verdade (não roda em
+CI/automação — para isso use `deploy.sh` direto). Assim como `deploy.sh`,
+ele ativa automaticamente o profile do Portainer (se `ENABLE_PORTAINER=
+true` no `.env`) para que Parar/Iniciar/Reiniciar cubram o Portainer
+também, não só o Keycloak/Postgres/Nginx.
 
 ## CI/CD e Registry
 

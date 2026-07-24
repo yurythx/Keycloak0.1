@@ -31,6 +31,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 # shellcheck source=scripts/lib/theme.sh
 source "scripts/lib/theme.sh"
+# shellcheck source=scripts/lib/services.sh
+source "scripts/lib/services.sh"
 
 DO_BUILD=0
 DO_PULL=1
@@ -93,7 +95,7 @@ log_ok "docker-compose.yml validado (docker compose config)"
 # (setup.sh pergunta isso). Exportado uma vez aqui pra todo "docker compose"
 # do resto do script (pull/build/up/down) enxergar o mesmo profile.
 PORTAINER_ON=0
-if grep -qE '^ENABLE_PORTAINER=true' .env 2>/dev/null; then
+if portainer_enabled; then
     PORTAINER_ON=1
     export COMPOSE_PROFILES=portainer
     log_ok "Portainer habilitado (ENABLE_PORTAINER=true no .env)"
@@ -191,29 +193,7 @@ fi
 
 # -----------------------------------------------------------------------------
 step "Painel de servicos"
-container_ip() {
-    docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' "$1" 2>/dev/null | awk '{print $1}'
-}
-host_ip() {
-    hostname -I 2>/dev/null | awk '{print $1}' || true
-}
-
-KC_HOSTNAME_V="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
-HOST_IP_V="$(host_ip)"
-HOST_IP_V="${HOST_IP_V:-<IP-da-VM>}"
-KEYCLOAK_IP_V="$(container_ip keycloak_server)"
-POSTGRES_IP_V="$(container_ip keycloak_db)"
-
-print_table_title "STACK NO AR"
-table_row "nginx"     "healthy" "${KC_HOSTNAME_V:-https://<KC_HOSTNAME>}"       "${HOST_IP_V}:80,443"
-table_row "keycloak"  "healthy" "${KC_HOSTNAME_V:-https://<KC_HOSTNAME>}/admin" "${KEYCLOAK_IP_V:-?}:8080 (interno)"
-table_row "postgres"  "healthy" "sem acesso externo"                           "${POSTGRES_IP_V:-?}:5432 (interno)"
-if [ "$PORTAINER_ON" = "1" ]; then
-    PORTAINER_BIND_V="$(grep -E '^PORTAINER_BIND=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
-    PORTAINER_IP_V="$(container_ip portainer)"
-    table_row "portainer" "healthy" "https://${PORTAINER_BIND_V:-127.0.0.1}:9443" "${PORTAINER_IP_V:-?}:9443"
-fi
-print_table_footer
+print_services_panel
 
 if [ "$DO_BUILD" = "1" ]; then
     IMAGE_SRC_V="build local (dev/homologacao)"
@@ -224,6 +204,7 @@ print_panel "RESUMO DO DEPLOY" \
     "Imagem do Keycloak: ${IMAGE_SRC_V}" \
     "Portainer: $([ "$PORTAINER_ON" = "1" ] && echo "ativado" || echo "desativado")" \
     "" \
+    "Gerenciar a stack (logs, reiniciar, backup...): ./manage.sh" \
     "Proximos portoes de validacao: docs/RUNBOOK.md (Etapa 1 em diante)"
 
 printf "\n%sDeploy concluido.%s\n\n" "${C_BGREEN}" "${C_RESET}"

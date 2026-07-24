@@ -136,10 +136,11 @@ print_table_title() {
 
 # table_row <nome> <status> <acesso> <rede-interna>
 table_row() {
-    local name="$1" status="$2" access="$3" internal="$4" status_color="${C_GREEN}"
+    local name="$1" status="$2" access="$3" internal="$4" status_color="${C_YELLOW}"
     case "$status" in
-        healthy|ok|ativo) status_color="${C_GREEN}" ;;
-        *) status_color="${C_YELLOW}" ;;
+        healthy|ok|ativo|running) status_color="${C_GREEN}" ;;
+        starting|restarting|sem-healthcheck) status_color="${C_YELLOW}" ;;
+        unhealthy|exited|dead|ausente|parado) status_color="${C_RED}" ;;
     esac
     printf "  %-15s %s%-10s%s %-42s %-20s\n" "$name" "$status_color" "$status" "${C_RESET}" "$access" "$internal"
 }
