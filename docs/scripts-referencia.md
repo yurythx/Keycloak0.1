@@ -43,6 +43,29 @@ Durante a execução, pergunta também se você quer habilitar o
 [Portainer](#portainer) — grava a resposta em `ENABLE_PORTAINER` no
 `.env`.
 
+> **Trocou o domínio depois de já ter um certificado? `setup.sh` avisa,
+> mas não troca sozinho.** Igual aos segredos, o certificado em
+> `nginx/certs/` **nunca é sobrescrito automaticamente** — se já existe
+> `fullchain.pem`/`privkey.pem`, o script mantém. Isso é seguro pra não
+> apagar sem querer um certificado real da CA da prefeitura, mas tem uma
+> pegadinha: se você editar `KC_HOSTNAME` no `.env` (trocar de domínio) e
+> o certificado antigo continuar aí, o Keycloak passa a responder no
+> domínio novo só que apresentando um certificado com o **CN do domínio
+> antigo** — o navegador rejeita, mesmo a stack estando saudável. O
+> `setup.sh` detecta esse descompasso (compara o `CN` do certificado
+> existente com o `KC_HOSTNAME` atual do `.env`) e avisa; a correção é
+> manual, de propósito:
+> ```bash
+> rm nginx/certs/fullchain.pem nginx/certs/privkey.pem
+> ./setup.sh --self-signed   # ou copie o certificado novo da CA antes de rodar
+> docker compose restart nginx   # arquivo montado por bind mount - restart já basta aqui
+>                                  # (diferente do .env, que precisa de "up -d"; ver nota abaixo)
+> ```
+> Achado real em produção: domínio trocado de `auth.prefeitura.gov.br`
+> para `sso.papermoon.cloud`, certificado autoassinado antigo (CN
+> `auth.prefeitura.gov.br`) esquecido em `nginx/certs/` — `curl -vk`
+> confirmou o CN desencontrado antes de identificar a causa.
+
 ---
 
 ## `deploy.sh`

@@ -164,7 +164,13 @@ make_secret_file "secrets/kc_admin_password.txt" "Senha do admin do Keycloak"
 step "Certificado TLS do Nginx (nginx/certs/)"
 # -----------------------------------------------------------------------------
 if [ -s nginx/certs/fullchain.pem ] && [ -s nginx/certs/privkey.pem ]; then
-    log_ok "Certificado ja presente em nginx/certs/"
+    HOST_FOR_CERT="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | sed -E 's#^KC_HOSTNAME=https?://##' | tr -d '\r')"
+    CERT_CN="$(openssl x509 -noout -subject -in nginx/certs/fullchain.pem 2>/dev/null | sed -E 's#.*CN\s*=\s*##')"
+    if [ -n "$HOST_FOR_CERT" ] && [ -n "$CERT_CN" ] && [ "$HOST_FOR_CERT" != "$CERT_CN" ]; then
+        log_warn "Certificado em nginx/certs/ foi emitido para '${CERT_CN}', mas KC_HOSTNAME agora e '${HOST_FOR_CERT}' - navegadores vao rejeitar (dominio nao bate). setup.sh NUNCA sobrescreve certificado existente automaticamente; se o dominio mudou de proposito, apague nginx/certs/*.pem e rode ./setup.sh de novo para gerar/copiar o certificado correto"
+    else
+        log_ok "Certificado ja presente em nginx/certs/ (CN='${CERT_CN}', bate com KC_HOSTNAME)"
+    fi
 elif [ "$SELF_SIGNED" = "1" ] || confirm "Certificado da CA da prefeitura ainda nao chegou. Gerar um autoassinado (SOMENTE para homologacao/teste)?"; then
     HOST_FOR_CERT="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | sed -E 's#^KC_HOSTNAME=https?://##' | tr -d '\r')"
     HOST_FOR_CERT="${HOST_FOR_CERT:-localhost}"
