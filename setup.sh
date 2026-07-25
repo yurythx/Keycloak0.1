@@ -179,6 +179,7 @@ elif [ "$SELF_SIGNED" = "1" ] || confirm "Certificado da CA da prefeitura ainda 
         -subj "/CN=${HOST_FOR_CERT}" -addext "subjectAltName=DNS:${HOST_FOR_CERT}" \
         >/dev/null 2>&1
     log_warn "Certificado AUTOASSINADO gerado para '${HOST_FOR_CERT}' (30 dias) - troque pelo certificado da CA corporativa antes do go-live em producao"
+    log_warn "Se o navegador ja tiver visitado este dominio via HTTPS antes (HSTS ativo, ver nginx.conf), ele pode BLOQUEAR o botao 'Avancado -> Continuar' para este certificado - limpe em chrome://net-internals/#hsts (Delete domain security policies) antes de testar"
 else
     log_warn "Certificado TLS pendente - copie fullchain.pem e privkey.pem para nginx/certs/ antes de rodar ./deploy.sh"
 fi

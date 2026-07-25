@@ -65,6 +65,22 @@ Durante a execução, pergunta também se você quer habilitar o
 > para `sso.papermoon.cloud`, certificado autoassinado antigo (CN
 > `auth.prefeitura.gov.br`) esquecido em `nginx/certs/` — `curl -vk`
 > confirmou o CN desencontrado antes de identificar a causa.
+>
+> **Pegadinha extra com HSTS**: depois de corrigir o certificado, o
+> Chrome pode continuar recusando o acesso com `ERR_CERT_AUTHORITY_INVALID`
+> e **sem oferecer o botão "Avançado → Continuar"**, mesmo o CN já
+> batendo. Isso acontece porque o `nginx.conf` envia
+> `Strict-Transport-Security` (HSTS, `max-age=63072000` ≈ 2 anos) — se o
+> navegador já visitou o domínio antes (com o certificado antigo) e
+> memorizou essa política, ele passa a exigir um certificado
+> **confiável** para sempre, sem opção de bypass manual, até a política
+> expirar ou ser limpa. Não é bug da stack, é o navegador cumprindo HSTS
+> à risca. Para testar com um certificado autoassinado nesse cenário,
+> limpe a política em `chrome://net-internals/#hsts` → "Delete domain
+> security policies" → informe o domínio. Em produção real, isso deixa
+> de ser um problema assim que o certificado emitido pela CA da
+> prefeitura estiver no lugar (confiável nativamente, sem bypass
+> necessário).
 
 ---
 
