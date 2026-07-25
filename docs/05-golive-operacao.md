@@ -24,6 +24,29 @@ crontab -e
 O script já cuida de compressão, checagem de erro e retenção. Detalhes em
 [Referência de Scripts](scripts-referencia.md#scriptsbackupsh).
 
+### 4. Rotação da senha do admin (`kc_admin`)
+
+Troque a senha do bootstrap admin sempre que ela tiver circulado por um
+canal que não seja o `secrets/kc_admin_password.txt` do próprio servidor
+— chat, ticket, e-mail, print de tela. Depois de exposta, considere
+comprometida e rotacione, mesmo que o canal pareça confiável.
+
+**Opção 1 — via Admin Console** (recomendada em produção, não exige
+recriar o contêiner):
+`Users → kc_admin → Credentials → Reset password`.
+
+**Opção 2 — regenerar o arquivo de secret e recriar o contêiner**:
+```bash
+rm secrets/kc_admin_password.txt
+./setup.sh --yes                              # regenera so' o que falta
+docker compose up -d --force-recreate keycloak
+```
+> `KC_BOOTSTRAP_ADMIN_PASSWORD` só é aplicada pelo Keycloak na **primeira
+> inicialização** do realm `master` — se o realm já existe, a Opção 2
+> troca o segredo no arquivo mas o Keycloak ignora no boot seguinte; use
+> a Opção 1 nesse caso. A Opção 2 vale mesmo para ambientes ainda não
+> inicializados (primeiro deploy) ou de homologação recriados do zero.
+
 ## Operação contínua
 
 Depois do go-live, o dia a dia é operado por dois scripts (detalhes
