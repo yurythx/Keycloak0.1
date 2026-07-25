@@ -55,6 +55,7 @@ só precisa operar o dia a dia, vá direto para
 | 4 | [Integração dos Sistemas Piloto](04-integracao-sistemas.md) | Django, GLPI, Zabbix (SSO/SLO) |
 | 5 | [Go-Live e Operação Contínua](05-golive-operacao.md) | MFA, brute force, backup, `manage.sh`, Portainer, menu automático |
 | — | [Referência de Scripts](scripts-referencia.md) | Todos os scripts do repositório, flags e exemplos |
+| — | [Tema Visual (logo e cores)](tema-visual.md) | White-label da tela de login com a identidade visual da prefeitura |
 | — | [CI/CD e Registry](ci-cd.md) | GitHub Actions, GitLab CI, política de segurança do Trivy |
 | — | [Verificação End-to-End](verificacao-final.md) | Checklist final antes do go-live real |
 

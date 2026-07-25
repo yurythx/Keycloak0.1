@@ -20,6 +20,11 @@ Criar o realm `prefeitura`. O realm `master` fica isolado, de uso
 exclusivo administrativo — nenhum client ou usuário de aplicação deve ser
 criado nele.
 
+> **Identidade visual**: se quiser já deixar a tela de login com a logo e
+> as cores da prefeitura, este é um bom momento — ver
+> [Tema Visual](tema-visual.md). Não bloqueia os portões desta etapa,
+> pode ser feito a qualquer momento.
+
 ### 3. Criar grupos e usuário de teste
 No realm `prefeitura`, criar os grupos `TI_ADMIN` e `SERVIDOR_GERAL`, e um
 usuário local de teste (`teste.ti`) com senha temporária.

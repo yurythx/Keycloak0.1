@@ -115,6 +115,11 @@ services:
       - kc_admin_password
     volumes:
       - ./certs:/opt/keycloak/certs:ro
+      # Tema visual customizado (logo/cores da prefeitura) - ver
+      # docs/tema-visual.md. "themes/" no container so tem um README por
+      # padrao (temas nativos ficam empacotados em jars), entao montar
+      # aqui nao esconde/substitui o keycloak.v2 nem nenhum tema nativo.
+      - ./themes:/opt/keycloak/themes:ro
     # Injecao de FQDN/IP do Domain Controller do Active Directory
     extra_hosts:
       - "${AD_DC_HOSTNAME}:${AD_DC_IP}"
