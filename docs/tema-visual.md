@@ -80,6 +80,15 @@ Resumo: PNG com fundo transparente, gerado em pelo menos 2x o tamanho
 final, abaixo de ~100 KB. Ajuste `--keycloak-logo-height`/`-width` no
 `styles.css` para a proporção real do arquivo.
 
+> **Enquanto `logo.png` não existe** (só o `README.md` placeholder está
+> no repositório): testado ao vivo — o tema funciona normalmente (cores,
+> botão, links já aparecem), só a área do cabeçalho fica **em branco**
+> onde a logo entraria. Como é `background-image` via variável CSS (não
+> uma tag `<img>`), o 404 do arquivo não gera ícone de "imagem quebrada"
+> nem erro visível — só não desenha nada ali. Confirmado com
+> `curl -I .../login/prefeitura/img/logo.png` retornando `404` numa tela
+> de login renderizada de verdade, sem nenhum outro efeito colateral.
+
 ## Montagem no `docker-compose.yml`
 
 Já está no `docker-compose.yml` deste repositório (serviço `keycloak`):
