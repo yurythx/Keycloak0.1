@@ -23,7 +23,11 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
-    - if: $CI_COMMIT_TAG
+    # So' tags de versao (vX.Y.Z), espelhando "tags: ['v*.*.*']" do
+    # .github/workflows/ci.yml - sem isso, QUALQUER tag (ex.: uma tag de
+    # backup ou marcador interno sem relacao com release) dispararia um
+    # build+push completo pro registry, coisa que o GitHub Actions nao faz.
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/
 
 # ---------------------------------------------------------------------------
 lint:

@@ -3,12 +3,17 @@ secrets/*
 !secrets/.gitkeep
 certs/*
 !certs/.gitkeep
+# certs/tls/ (certificado proprio da CA da prefeitura, se usado): a pasta
+# em si fica versionada (com .gitkeep, mesmo padrao de secrets/ e certs/
+# acima), mas nenhum .pem real dentro dela.
+!certs/tls/
+certs/tls/*
+!certs/tls/.gitkeep
 .env
-# certs/tls/*.pem (certificado proprio da CA da prefeitura, se usado) ja
-# cai em "certs/*" acima. Certificados do Let's Encrypt (modo producao com
-# docker-compose.prod.yml) vivem no volume nomeado "traefik-certificates",
-# fora do repositorio. O dynamic config gerado pelo setup.sh pra apontar
-# pro certificado proprio tambem nao e' versionado (especifico do ambiente):
+# Certificados do Let's Encrypt (modo producao com docker-compose.prod.yml)
+# vivem no volume nomeado "traefik-certificates", fora do repositorio. O
+# dynamic config gerado pelo setup.sh pra apontar pro certificado proprio
+# tambem nao e' versionado (especifico do ambiente) - so' o .gitkeep fica:
 traefik/dynamic-certs/*.yml
 
 # Backups locais
