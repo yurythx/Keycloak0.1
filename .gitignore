@@ -4,9 +4,12 @@ secrets/*
 certs/*
 !certs/.gitkeep
 .env
-# Certificados do Traefik (Let's Encrypt, modo producao com
+# certs/tls/*.pem (certificado proprio da CA da prefeitura, se usado) ja
+# cai em "certs/*" acima. Certificados do Let's Encrypt (modo producao com
 # docker-compose.prod.yml) vivem no volume nomeado "traefik-certificates",
-# fora do repositorio - nao ha' arquivo local pra ignorar aqui.
+# fora do repositorio. O dynamic config gerado pelo setup.sh pra apontar
+# pro certificado proprio tambem nao e' versionado (especifico do ambiente):
+traefik/dynamic-certs/*.yml
 
 # Backups locais
 backups/

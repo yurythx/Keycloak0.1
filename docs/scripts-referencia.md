@@ -187,13 +187,15 @@ automaticamente via labels no `docker-compose.yml` (provider Docker do
 próprio Traefik, lendo o socket do Docker em modo somente leitura), sem
 nenhum arquivo de configuração de proxy pra manter.
 
-**Dois modos de TLS**, controlados pelo `.env` (pergunta feita pelo
-`setup.sh`):
+**Três modos de TLS**, verificados nesta ordem de prioridade pelo
+`setup.sh` a cada execução (idempotente — pode rodar de novo a qualquer
+momento pra reavaliar):
 
 | Modo | Como ativa | Certificado |
 |---|---|---|
-| Homologação/rede interna (padrão) | Nada a fazer — é o padrão | Autoassinado, gerado automaticamente pelo próprio Traefik |
-| Produção real | `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` no `.env` (setup.sh grava isso ao responder "sim" pra Let's Encrypt) | Let's Encrypt via ACME, emitido e renovado sozinho |
+| Certificado próprio (CA da prefeitura) | Copiar `fullchain.pem`/`privkey.pem` para `certs/tls/` e rodar `./setup.sh` de novo | O que você forneceu — sem ACME, sem DNS público |
+| Produção com Let's Encrypt | `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` no `.env` (setup.sh grava isso ao responder "sim" pra Let's Encrypt) | Let's Encrypt via ACME, emitido e renovado sozinho |
+| Homologação/rede interna (padrão) | Nada a fazer — é o padrão quando nenhum dos dois acima se aplica | Autoassinado, gerado automaticamente pelo próprio Traefik |
 
 `docker-compose.prod.yml` é um **overlay**: só adiciona ao `traefik` as
 flags de ACME e o volume nomeado `traefik-certificates` (onde o
@@ -202,7 +204,57 @@ certificado Let's Encrypt fica guardado, fora do repositório), e ao
 compose base. Produção real com Let's Encrypt **exige DNS público**
 resolvendo `KC_HOSTNAME_FQDN` para esta VM, com as portas 80/443
 alcançáveis da internet (é onde o desafio ACME acontece) — sem isso a
-emissão do certificado falha.
+emissão do certificado falha. Se o domínio só existe na rede interna da
+prefeitura (`sso.papermoon.cloud` hoje resolve pra um IP privado), esse
+modo **não é viável** sem expor a VM publicamente — use o certificado
+próprio nesse caso.
+
+### Certificado próprio (CA interna/corporativa da prefeitura)
+
+Alternativa ao Let's Encrypt pra quem tem um certificado emitido pela CA
+da própria prefeitura (cenário comum em rede interna, sem DNS público).
+Mecanismo: o Traefik roda com o **provider "file"** sempre ativo
+(`--providers.file.directory=/etc/traefik/dynamic-certs`, observando a
+pasta continuamente), além do provider Docker. O `setup.sh`, ao detectar
+`certs/tls/fullchain.pem` e `certs/tls/privkey.pem`, gera
+`traefik/dynamic-certs/tls.yml`:
+```yaml
+tls:
+  certificates:
+    - certFile: /certs/tls/fullchain.pem
+      keyFile: /certs/tls/privkey.pem
+```
+O Traefik registra esse certificado na store de TLS e passa a servi-lo
+por **SNI** pra qualquer conexão em `sso.papermoon.cloud` — não precisa
+de label extra no `keycloak` nem de flag no `deploy.sh`, é automático.
+Sem esse arquivo, o Traefik cai de volta no certificado autoassinado
+próprio (`CN=TRAEFIK DEFAULT CERT`).
+
+Igual ao antigo comportamento do Nginx, o `setup.sh` confere se o `CN`
+do certificado bate com `KC_HOSTNAME_FQDN` e avisa em caso de
+descompasso — mas **não sobrescreve** os arquivos automaticamente
+(mesma filosofia dos segredos).
+
+> **Achado real ao implementar isso**: a checagem de CN usava
+> `sed -E 's#.*CN\s*=\s*##'`, que pega tudo depois de `CN=` **até o fim
+> da linha** — funciona pra um `subject=CN=x` isolado, mas quebra pra
+> qualquer certificado real de CA, que quase sempre tem mais campos
+> depois (`subject=CN=x, O=Prefeitura, C=BR`): o valor extraído virava
+> `x, O=Prefeitura, C=BR` inteiro, e a comparação com `KC_HOSTNAME_FQDN`
+> dava falso-positivo de "domínio não bate" mesmo com o certificado
+> certo. Corrigido parando no próximo campo:
+> `sed -E 's#.*CN\s*=\s*##; s#,.*##'`. Testado com um certificado real
+> de subject multi-campo antes de considerar corrigido — o teste ingênuo
+> (só `CN=x` isolado) não pegava esse bug.
+>
+> Validado ao vivo de ponta a ponta: certificado de teste gerado com
+> `subject=CN=sso.papermoon.cloud, O=Prefeitura (CA de teste)`, colocado
+> em `certs/tls/`, `setup.sh` detectou e confirmou o CN batendo,
+> `docker compose up -d --force-recreate traefik` e o `openssl s_client`
+> confirmou o Traefik servindo **esse** certificado (não mais
+> `TRAEFIK DEFAULT CERT`) — depois removido, confirmando que o Traefik
+> volta ao autoassinado sozinho. Testado nos dois sentidos, mais o caso
+> de CN errado (detecta e avisa corretamente).
 
 Paridade de segurança com o antigo `nginx.conf`: um middleware Traefik
 (`security-headers`, aplicado via label no `keycloak`) envia os mesmos

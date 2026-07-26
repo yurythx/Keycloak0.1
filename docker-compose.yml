@@ -183,11 +183,21 @@ services:
   # ---------------------------------------------------------------------------
   # Proxy Reverso Traefik (Unico Ponto de Entrada Externo)
   # ---------------------------------------------------------------------------
-  # TLS automatico: autoassinado interno em homologacao (padrao), ou real
-  # via Let's Encrypt em producao (docker-compose.prod.yml, ativado pelo
-  # setup.sh). Versao travada em v3.7.9 (nao "latest"): testada e validada
-  # contra o Docker Engine deste projeto - versoes v3.3 mais antigas tem
-  # um bug real de negociacao de API com daemons Docker recentes (ver
+  # TLS automatico, tres modos possiveis (setup.sh cuida do 1 e 2; o 3 e'
+  # so' copiar arquivo):
+  #   1. Homologacao (padrao): autoassinado interno, gerado pelo proprio
+  #      Traefik, nenhuma configuracao.
+  #   2. Producao com Let's Encrypt: docker-compose.prod.yml (overlay,
+  #      exige DNS publico) - ativado pelo setup.sh.
+  #   3. Certificado proprio (CA interna/corporativa da prefeitura): copie
+  #      fullchain.pem/privkey.pem para certs/tls/ e rode ./setup.sh de
+  #      novo - ele gera o dynamic config do Traefik (provider "file")
+  #      apontando pra eles. Nao usa ACME nem precisa de DNS publico.
+  #      Detectado automaticamente por SNI - nao precisa de label extra
+  #      no keycloak nem de flag no deploy.sh.
+  # Versao travada em v3.7.9 (nao "latest"): testada e validada contra o
+  # Docker Engine deste projeto - versoes v3.3 mais antigas tem um bug
+  # real de negociacao de API com daemons Docker recentes (ver
   # docs/scripts-referencia.md#traefik).
   traefik:
     image: traefik:v3.7.9
@@ -196,6 +206,8 @@ services:
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
+      - "--providers.file.directory=/etc/traefik/dynamic-certs"
+      - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       - "--api.dashboard=false"
@@ -207,6 +219,8 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/dynamic-certs:/etc/traefik/dynamic-certs:ro
+      - ./certs/tls:/certs/tls:ro
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 15s

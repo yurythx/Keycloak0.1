@@ -31,17 +31,25 @@ Detalhes de todas as flags em [Referência de Scripts](scripts-referencia.md#set
 > `chmod +x setup.sh deploy.sh manage.sh scripts/*.sh scripts/lib/*.sh`
 
 ### 3. Certificado TLS (opcional copiar algo aqui)
-O proxy reverso é o [Traefik](https://traefik.io/) — ele **gerencia o
-certificado TLS sozinho**, não há arquivo `.pem` para copiar:
+O proxy reverso é o [Traefik](https://traefik.io/) — três modos:
 - **Homologação/rede interna** (padrão do `setup.sh`): certificado
-  autoassinado gerado automaticamente pelo próprio Traefik.
-- **Produção real**: se você respondeu "sim" para Let's Encrypt no
+  autoassinado gerado automaticamente pelo próprio Traefik, nada a copiar.
+- **Produção com Let's Encrypt**: se você respondeu "sim" pra isso no
   `setup.sh`, o Traefik emite e renova sozinho via ACME (requer DNS
   público — ver [Etapa 0](00-pre-requisitos.md)).
+- **Certificado próprio da CA da prefeitura**: copie
+  `fullchain.pem`/`privkey.pem` para `certs/tls/` e rode `./setup.sh`
+  de novo — ele detecta os arquivos, confere se batem com o
+  `KC_HOSTNAME`, e configura o Traefik pra servir esse certificado (ver
+  [Referência de Scripts](scripts-referencia.md#traefik)).
 
-O único arquivo que ainda é copiado manualmente aqui é:
+O outro arquivo que ainda é copiado manualmente aqui é:
 - `certs/ad-ca.pem` — CA do AD (pode ser feito já aqui ou só na
-  [Etapa 3](03-federacao-ad.md), quando for configurar a federação).
+  [Etapa 3](03-federacao-ad.md), quando for configurar a federação). Não
+  confundir com `certs/tls/` acima: um é a CA do Active Directory (pro
+  Keycloak confiar no LDAPS), o outro é o certificado do próprio Traefik
+  — arquivos e finalidades completamente diferentes, mesma pasta `certs/`
+  só por organização.
 
 ### 4. Subir a stack
 ```bash

@@ -32,8 +32,7 @@ administrativos no domínio. Essa conta é usada na
 
 ### 4. Certificado TLS público
 O proxy reverso é o [Traefik](https://traefik.io/), que gerencia o
-certificado TLS automaticamente — **não é necessário gerar/copiar nenhum
-arquivo `.pem` manualmente**:
+certificado TLS — três modos possíveis, escolha o que se aplica:
 - **Homologação/rede interna** (padrão): o Traefik serve um certificado
   autoassinado próprio, sem nenhuma configuração — o navegador mostra o
   aviso padrão de "conexão não é segura", esperado nesse modo.
@@ -42,6 +41,16 @@ arquivo `.pem` manualmente**:
   e as portas 80/443 alcançáveis da internet (o desafio TLS-ALPN do
   Let's Encrypt acontece nelas). O `setup.sh` pergunta se quer ativar
   esse modo — se sim, o Traefik emite e renova o certificado sozinho.
+- **Certificado próprio, emitido pela CA interna/corporativa da
+  prefeitura** (o caminho mais comum quando o domínio só resolve na rede
+  interna, como `sso.papermoon.cloud` hoje): não precisa de DNS público
+  nem de Let's Encrypt — só copiar `fullchain.pem`/`privkey.pem` em
+  `certs/tls/` e rodar `./setup.sh` de novo. Ver
+  [Referência de Scripts](scripts-referencia.md#traefik).
+
+Nos três casos **nenhum arquivo é obrigatório antes do primeiro
+deploy** — o padrão (autoassinado) sempre funciona sem configuração
+alguma; os outros dois são escolhas explícitas.
 
 Ainda é necessária:
 - **CA raiz do Active Directory**, exportada em `.pem`, para o truststore

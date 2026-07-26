@@ -60,8 +60,8 @@ log_ok "openssl encontrado: $(openssl version)"
 # -----------------------------------------------------------------------------
 step "Preparando estrutura de diretorios"
 # -----------------------------------------------------------------------------
-mkdir -p secrets certs
-log_ok "secrets/  certs/"
+mkdir -p secrets certs certs/tls traefik/dynamic-certs
+log_ok "secrets/  certs/  certs/tls/  traefik/dynamic-certs/"
 
 # -----------------------------------------------------------------------------
 step "Configurando .env"
@@ -104,12 +104,12 @@ else
     # automaticamente (ver confirm() em scripts/lib/theme.sh), o que sem
     # essa guarda ligaria Let's Encrypt sem querer numa automacao/CI.
     ACME_LINES=""
-    if [ "$SELF_SIGNED" != "1" ] && confirm "Habilitar Let's Encrypt real (producao - requer DNS publico resolvendo '${KC_HOSTNAME_FQDN_V}' para este host)?" "N"; then
+    if [ "$SELF_SIGNED" != "1" ] && confirm "Habilitar Let's Encrypt real (producao - requer DNS publico resolvendo '${KC_HOSTNAME_FQDN_V}' para este host)? Responda NAO se for usar certificado proprio da CA da prefeitura" "N"; then
         ACME_EMAIL_V=$(ask "E-mail para o Let's Encrypt (avisos de expiracao/problemas)" "admin@${KC_HOSTNAME_FQDN_V#*.}")
         ACME_LINES=$(printf 'ACME_EMAIL=%s\nCOMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml\n' "$ACME_EMAIL_V")
         log_warn "Let's Encrypt ativado - confirme que '${KC_HOSTNAME_FQDN_V}' resolve por DNS publico para este host ANTES de rodar ./deploy.sh (senao o desafio ACME falha)"
     else
-        log_info "Modo homologacao/rede interna - Traefik vai servir certificado autoassinado (nenhum arquivo pra gerenciar)"
+        log_info "Modo homologacao/rede interna - Traefik vai servir certificado autoassinado, a menos que voce copie um certificado proprio depois (ver etapa 'Modo TLS' abaixo)"
     fi
 
     cat > .env <<EOF
@@ -190,15 +190,46 @@ make_secret_file "secrets/kc_admin_password.txt" "Senha do admin do Keycloak"
 # -----------------------------------------------------------------------------
 step "Modo TLS (Traefik)"
 # -----------------------------------------------------------------------------
-# Nao ha' arquivo de certificado pra gerar/checar aqui: em homologacao o
-# Traefik serve seu proprio certificado autoassinado automaticamente; em
-# producao (Let's Encrypt) ele emite e renova via ACME sozinho, guardando
-# tudo no volume nomeado "traefik-certificates" (fora do repositorio).
-if grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null; then
+# Tres modos, checados nesta ordem de prioridade:
+#   1. Certificado proprio em certs/tls/ (CA interna/corporativa da
+#      prefeitura) - se presente, gera o dynamic config do Traefik
+#      (provider "file") apontando pra ele. Detectado por SNI
+#      automaticamente, sem precisar de label extra no keycloak.
+#   2. Let's Encrypt real (docker-compose.prod.yml, COMPOSE_FILE no .env).
+#   3. Homologacao - autoassinado automatico do proprio Traefik.
+CUSTOM_CERT_DIR="certs/tls"
+CUSTOM_CERT_FILE="${CUSTOM_CERT_DIR}/fullchain.pem"
+CUSTOM_KEY_FILE="${CUSTOM_CERT_DIR}/privkey.pem"
+DYNAMIC_TLS_FILE="traefik/dynamic-certs/tls.yml"
+
+if [ -s "$CUSTOM_CERT_FILE" ] && [ -s "$CUSTOM_KEY_FILE" ]; then
+    HOST_FOR_CERT="$(grep -E '^KC_HOSTNAME_FQDN=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+    # Extrai so' o valor do CN, parando no proximo campo do subject (ex.:
+    # "CN=x, O=y" -> "x") - certificados reais de CA quase sempre tem O=/OU=/C=
+    # depois do CN; sem parar no ",", o valor extraido incluia esses campos
+    # tambem e a comparacao com KC_HOSTNAME_FQDN dava falso-positivo de
+    # mismatch mesmo com o dominio certo (achado real, testado com um
+    # certificado de teste com subject "CN=x, O=y").
+    CERT_CN="$(openssl x509 -noout -subject -in "$CUSTOM_CERT_FILE" 2>/dev/null | sed -E 's#.*CN\s*=\s*##; s#,.*##')"
+    cat > "$DYNAMIC_TLS_FILE" <<EOF
+tls:
+  certificates:
+    - certFile: /certs/tls/fullchain.pem
+      keyFile: /certs/tls/privkey.pem
+EOF
+    if [ -n "$HOST_FOR_CERT" ] && [ -n "$CERT_CN" ] && [ "$HOST_FOR_CERT" != "$CERT_CN" ]; then
+        log_warn "Certificado proprio ativo em ${CUSTOM_CERT_DIR}/, mas foi emitido para '${CERT_CN}' e KC_HOSTNAME_FQDN e' '${HOST_FOR_CERT}' - navegadores vao rejeitar (dominio nao bate). Confira se e' o arquivo certo"
+    else
+        log_ok "Certificado proprio (CA da prefeitura) ativo em ${CUSTOM_CERT_DIR}/ (CN='${CERT_CN}', bate com KC_HOSTNAME_FQDN)"
+    fi
+elif grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null; then
+    rm -f "$DYNAMIC_TLS_FILE"
     ACME_EMAIL_SHOW="$(grep -E '^ACME_EMAIL=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
     log_ok "Producao - Let's Encrypt ativado (e-mail: ${ACME_EMAIL_SHOW:-?}). Confirme o DNS publico antes do deploy"
 else
+    rm -f "$DYNAMIC_TLS_FILE"
     log_ok "Homologacao/rede interna - certificado autoassinado automatico do Traefik (aviso de seguranca esperado no navegador)"
+    log_info "Tem certificado proprio da CA da prefeitura (nao Let's Encrypt)? Copie fullchain.pem e privkey.pem para ${CUSTOM_CERT_DIR}/ e rode ./setup.sh de novo"
     log_warn "Se o navegador ja tiver visitado este dominio via HTTPS antes com HSTS ativo, ele pode BLOQUEAR o botao 'Avancado -> Continuar' - limpe em chrome://net-internals/#hsts (Delete domain security policies) antes de testar"
 fi
 
@@ -217,7 +248,11 @@ fi
 STATUS_ENV="OK"
 STATUS_SECRETS="OK"
 STATUS_TLS="homologacao (Traefik autoassinado)"
-grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null && STATUS_TLS="producao (Let's Encrypt)"
+if [ -s certs/tls/fullchain.pem ] && [ -s certs/tls/privkey.pem ]; then
+    STATUS_TLS="certificado proprio (CA da prefeitura)"
+elif grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null; then
+    STATUS_TLS="producao (Let's Encrypt)"
+fi
 STATUS_PORTAINER="desativado"
 grep -qE '^ENABLE_PORTAINER=true' .env 2>/dev/null && STATUS_PORTAINER="ativado (127.0.0.1:9443)"
 
