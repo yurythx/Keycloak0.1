@@ -60,7 +60,7 @@ print_header() {
     print_banner
     printf "%s%s%s\n" "${C_DIM}" "${RULE_LINE}" "${C_RESET}"
     printf "  %s%s%s\n" "${C_WHITE}" "$1" "${C_RESET}"
-    printf "  %sSSO da Prefeitura -- Stack Keycloak / Postgres / Nginx%s\n" "${C_DIM}" "${C_RESET}"
+    printf "  %sSSO da Prefeitura -- Stack Keycloak / Postgres / Traefik%s\n" "${C_DIM}" "${C_RESET}"
     printf "%s%s%s\n\n" "${C_DIM}" "${RULE_LINE}" "${C_RESET}"
 }
 

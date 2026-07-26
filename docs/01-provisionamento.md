@@ -19,21 +19,27 @@ git clone <url-do-repositorio> /opt/keycloak-stack
 cd /opt/keycloak-stack
 ./setup.sh
 ```
-`./setup.sh` cria `certs/`, `secrets/`, `nginx/certs/`, gera o `.env` de
-forma interativa (pergunta domínio, dados do AD, se quer o Portainer) e os
-segredos de 32 caracteres em `secrets/*.txt`. É idempotente — pode rodar
-de novo sem sobrescrever nada que já existe. Detalhes de todas as flags em
-[Referência de Scripts](scripts-referencia.md#setupsh).
+`./setup.sh` cria `certs/`, `secrets/`, gera o `.env` de forma interativa
+(pergunta domínio, dados do AD, se quer o Portainer, se quer ativar
+Let's Encrypt real) e os segredos de 32 caracteres em `secrets/*.txt`. É
+idempotente — pode rodar de novo sem sobrescrever nada que já existe.
+Detalhes de todas as flags em [Referência de Scripts](scripts-referencia.md#setupsh).
 
 > O bit de execução dos scripts já vem certo do `git clone` (versionado no
 > próprio git). Se por algum motivo não estiver executável (ex.: baixou um
 > `.zip` em vez de clonar), rode uma vez:
 > `chmod +x setup.sh deploy.sh manage.sh scripts/*.sh scripts/lib/*.sh`
 
-### 3. Copiar os certificados reais
-Dentro da estrutura que o `setup.sh` acabou de criar:
-- `nginx/certs/fullchain.pem` e `nginx/certs/privkey.pem` — TLS público,
-  emitido pela CA corporativa da prefeitura (da [Etapa 0](00-pre-requisitos.md)).
+### 3. Certificado TLS (opcional copiar algo aqui)
+O proxy reverso é o [Traefik](https://traefik.io/) — ele **gerencia o
+certificado TLS sozinho**, não há arquivo `.pem` para copiar:
+- **Homologação/rede interna** (padrão do `setup.sh`): certificado
+  autoassinado gerado automaticamente pelo próprio Traefik.
+- **Produção real**: se você respondeu "sim" para Let's Encrypt no
+  `setup.sh`, o Traefik emite e renova sozinho via ACME (requer DNS
+  público — ver [Etapa 0](00-pre-requisitos.md)).
+
+O único arquivo que ainda é copiado manualmente aqui é:
 - `certs/ad-ca.pem` — CA do AD (pode ser feito já aqui ou só na
   [Etapa 3](03-federacao-ad.md), quando for configurar a federação).
 
@@ -53,17 +59,18 @@ IP:porta interno.
 ## Portão de Validação
 
 - [ ] **Status dos contêineres**: `docker compose ps` mostra `keycloak_db`,
-      `keycloak_server` e `keycloak_proxy` como `healthy`.
+      `keycloak_server` e `keycloak_traefik` como `healthy`.
 - [ ] **Isolamento de rede**: tentar conectar na porta 5432 a partir de
       outra máquina da rede local — a conexão deve ser **recusada**
       (Postgres não publica porta no host e a rede `backend` é
       `internal: true`).
 - [ ] **Handshake TLS**: acessar `https://auth.prefeitura.gov.br/` no
-      navegador — certificado válido, sem avisos de segurança, tela de
-      login do Keycloak carrega.
+      navegador — tela de login do Keycloak carrega. Em homologação
+      (autoassinado) o aviso de "conexão não é segura" é esperado; em
+      produção com Let's Encrypt ativado, deve carregar sem avisos.
 - [ ] **Liveness/readiness**: `/health/live` e `/health/ready` ficam na
       *management port* (9000) do Keycloak por padrão — **não** na porta
-      pública 8080/443, e essa porta **não é exposta** pelo Nginx (evita
+      pública 8080/443, e essa porta **não é exposta** pelo Traefik (evita
       vazar `/metrics` publicamente). Valide a saúde real assim, não pelo
       navegador:
       ```bash

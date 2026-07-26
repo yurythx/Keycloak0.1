@@ -30,11 +30,23 @@ Com permissão **somente leitura** (bind/consulta) — sem privilégios
 administrativos no domínio. Essa conta é usada na
 [Etapa 3](03-federacao-ad.md) para a federação LDAPS.
 
-### 4. Certificados
-- **TLS público** para `auth.prefeitura.gov.br`, emitido pela CA
-  corporativa da prefeitura (`fullchain.pem` + `privkey.pem`).
+### 4. Certificado TLS público
+O proxy reverso é o [Traefik](https://traefik.io/), que gerencia o
+certificado TLS automaticamente — **não é necessário gerar/copiar nenhum
+arquivo `.pem` manualmente**:
+- **Homologação/rede interna** (padrão): o Traefik serve um certificado
+  autoassinado próprio, sem nenhuma configuração — o navegador mostra o
+  aviso padrão de "conexão não é segura", esperado nesse modo.
+- **Produção real com [Let's Encrypt](https://letsencrypt.org/)**: exige
+  **DNS público** resolvendo `auth.prefeitura.gov.br` para o IP desta VM,
+  e as portas 80/443 alcançáveis da internet (o desafio TLS-ALPN do
+  Let's Encrypt acontece nelas). O `setup.sh` pergunta se quer ativar
+  esse modo — se sim, o Traefik emite e renova o certificado sozinho.
+
+Ainda é necessária:
 - **CA raiz do Active Directory**, exportada em `.pem`, para o truststore
-  do Keycloak (necessária na [Etapa 3](03-federacao-ad.md) para LDAPS).
+  do Keycloak (necessária na [Etapa 3](03-federacao-ad.md) para LDAPS) —
+  isso é independente do certificado TLS do proxy.
 
 ### 5. Janela de manutenção
 Aprovada e comunicada às áreas afetadas.

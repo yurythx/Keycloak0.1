@@ -22,16 +22,16 @@ entrega tudo executável.
 
 ## `setup.sh`
 
-Prepara o terreno: valida Docker/Compose/openssl, cria `secrets/`,
-`certs/`, `nginx/certs/`, gera o `.env` (interativo) e os segredos de 32
-caracteres, e opcionalmente um certificado autoassinado para
-homologação. **Nunca sobrescreve** segredo ou certificado já existente —
-para reconfigurar do zero, apague o `.env`/arquivo específico antes.
+Prepara o terreno: valida Docker/Compose/openssl, cria `secrets/` e
+`certs/`, gera o `.env` (interativo) e os segredos de 32 caracteres.
+**Nunca sobrescreve** segredo já existente — para reconfigurar do zero,
+apague o `.env`/arquivo específico antes.
 
 ```bash
 ./setup.sh                 # interativo
 ./setup.sh --yes           # aceita os padrões sem perguntar (CI/automação)
-./setup.sh --self-signed   # gera certificado de teste (NUNCA em produção)
+./setup.sh --self-signed   # forca modo homologacao (Traefik autoassinado),
+                             # pula a pergunta de Let's Encrypt mesmo com --yes
 ./setup.sh --no-anim       # desativa a animação de abertura
 ```
 
@@ -41,46 +41,27 @@ propósito: segredos base64 "crus" quebram testes com `curl -d` sem
 
 Durante a execução, pergunta também se você quer habilitar o
 [Portainer](#portainer) — grava a resposta em `ENABLE_PORTAINER` no
-`.env`.
+`.env` — e se quer ativar Let's Encrypt real (ver [Traefik](#traefik)).
 
-> **Trocou o domínio depois de já ter um certificado? `setup.sh` avisa,
-> mas não troca sozinho.** Igual aos segredos, o certificado em
-> `nginx/certs/` **nunca é sobrescrito automaticamente** — se já existe
-> `fullchain.pem`/`privkey.pem`, o script mantém. Isso é seguro pra não
-> apagar sem querer um certificado real da CA da prefeitura, mas tem uma
-> pegadinha: se você editar `KC_HOSTNAME` no `.env` (trocar de domínio) e
-> o certificado antigo continuar aí, o Keycloak passa a responder no
-> domínio novo só que apresentando um certificado com o **CN do domínio
-> antigo** — o navegador rejeita, mesmo a stack estando saudável. O
-> `setup.sh` detecta esse descompasso (compara o `CN` do certificado
-> existente com o `KC_HOSTNAME` atual do `.env`) e avisa; a correção é
-> manual, de propósito:
-> ```bash
-> rm nginx/certs/fullchain.pem nginx/certs/privkey.pem
-> ./setup.sh --self-signed   # ou copie o certificado novo da CA antes de rodar
-> docker compose restart nginx   # arquivo montado por bind mount - restart já basta aqui
->                                  # (diferente do .env, que precisa de "up -d"; ver nota abaixo)
-> ```
-> Achado real em produção: domínio trocado de `auth.prefeitura.gov.br`
-> para `sso.papermoon.cloud`, certificado autoassinado antigo (CN
-> `auth.prefeitura.gov.br`) esquecido em `nginx/certs/` — `curl -vk`
-> confirmou o CN desencontrado antes de identificar a causa.
+> **Não há mais arquivo de certificado pra gerenciar.** Desde a troca do
+> proxy reverso de Nginx para [Traefik](#traefik), o TLS é gerenciado
+> automaticamente (autoassinado em homologação, Let's Encrypt em
+> produção) — a antiga pegadinha de certificado desatualizado após troca
+> de domínio (CN antigo preso em `nginx/certs/`) **não existe mais nessa
+> forma**: o Traefik não fixa um certificado por domínio em disco no modo
+> homologação, então não há arquivo pra ficar desatualizado.
 >
-> **Pegadinha extra com HSTS**: depois de corrigir o certificado, o
-> Chrome pode continuar recusando o acesso com `ERR_CERT_AUTHORITY_INVALID`
-> e **sem oferecer o botão "Avançado → Continuar"**, mesmo o CN já
-> batendo. Isso acontece porque o `nginx.conf` envia
-> `Strict-Transport-Security` (HSTS, `max-age=63072000` ≈ 2 anos) — se o
-> navegador já visitou o domínio antes (com o certificado antigo) e
-> memorizou essa política, ele passa a exigir um certificado
-> **confiável** para sempre, sem opção de bypass manual, até a política
-> expirar ou ser limpa. Não é bug da stack, é o navegador cumprindo HSTS
-> à risca. Para testar com um certificado autoassinado nesse cenário,
-> limpe a política em `chrome://net-internals/#hsts` → "Delete domain
-> security policies" → informe o domínio. Em produção real, isso deixa
-> de ser um problema assim que o certificado emitido pela CA da
-> prefeitura estiver no lugar (confiável nativamente, sem bypass
-> necessário).
+> O que **continua valendo** é o HSTS: o navegador pode continuar
+> recusando o acesso a um domínio que ele já visitou antes com HTTPS,
+> **sem oferecer o botão "Avançado → Continuar"**, mesmo com a stack
+> saudável — o middleware `security-headers` do Traefik envia
+> `Strict-Transport-Security` (`max-age=63072000` ≈ 2 anos, ver
+> [Traefik](#traefik)) e o Chrome memoriza isso por domínio. Não é bug da
+> stack, é o navegador cumprindo HSTS à risca. Pra testar com certificado
+> autoassinado nesse cenário, limpe a política em
+> `chrome://net-internals/#hsts` → "Delete domain security policies" →
+> informe o domínio. Isso deixa de ser um problema assim que o
+> certificado for confiável nativamente (Let's Encrypt em produção).
 
 ---
 
@@ -149,7 +130,7 @@ quando o deploy terminou):
 Só para uso interativo num terminal de verdade (não roda em CI/automação
 — para isso use `deploy.sh` direto). Ativa automaticamente o profile do
 Portainer (se habilitado) para que Parar/Iniciar/Reiniciar cubram o
-Portainer também, não só o Keycloak/Postgres/Nginx.
+Portainer também, não só o Keycloak/Postgres/Traefik.
 
 > **`docker compose restart` vs `docker compose up -d` — pegadinha real**:
 > `restart` reusa o contêiner que já existe, com o ambiente que ele já
@@ -195,6 +176,81 @@ ssh usuario@vm bash --noprofile --norc
 > repositório, afeta todo login na VM). É o único script deste projeto
 > que mexe em configuração do sistema — todos os outros vivem inteiramente
 > dentro da pasta do repositório.
+
+---
+
+## Traefik
+
+Proxy reverso e único ponto de entrada externo da stack (porta host
+`80`/`443`) — substituiu o Nginx. Descobre o serviço `keycloak`
+automaticamente via labels no `docker-compose.yml` (provider Docker do
+próprio Traefik, lendo o socket do Docker em modo somente leitura), sem
+nenhum arquivo de configuração de proxy pra manter.
+
+**Dois modos de TLS**, controlados pelo `.env` (pergunta feita pelo
+`setup.sh`):
+
+| Modo | Como ativa | Certificado |
+|---|---|---|
+| Homologação/rede interna (padrão) | Nada a fazer — é o padrão | Autoassinado, gerado automaticamente pelo próprio Traefik |
+| Produção real | `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` no `.env` (setup.sh grava isso ao responder "sim" pra Let's Encrypt) | Let's Encrypt via ACME, emitido e renovado sozinho |
+
+`docker-compose.prod.yml` é um **overlay**: só adiciona ao `traefik` as
+flags de ACME e o volume nomeado `traefik-certificates` (onde o
+certificado Let's Encrypt fica guardado, fora do repositório), e ao
+`keycloak` o label que aponta pro resolver ACME. Não duplica nada do
+compose base. Produção real com Let's Encrypt **exige DNS público**
+resolvendo `KC_HOSTNAME_FQDN` para esta VM, com as portas 80/443
+alcançáveis da internet (é onde o desafio ACME acontece) — sem isso a
+emissão do certificado falha.
+
+Paridade de segurança com o antigo `nginx.conf`: um middleware Traefik
+(`security-headers`, aplicado via label no `keycloak`) envia os mesmos
+três headers que o Nginx enviava — `Strict-Transport-Security`
+(HSTS), `X-Frame-Options: SAMEORIGIN` (não `DENY` — o Keycloak usa um
+iframe same-origin pro "status iframe" de SSO/SLO) e
+`X-Content-Type-Options: nosniff`. O antigo `client_max_body_size 20m`
+do Nginx não tem equivalente porque não é necessário: o Traefik não
+impõe limite de corpo de requisição por padrão.
+
+### Dois achados reais ao migrar de Nginx pra Traefik
+
+Encontrados rodando a stack de verdade (não só revisão de código) —
+documentados aqui pra não serem redescobertos:
+
+> **1. Versão do Traefik importa** — `traefik:v3.3` entrou em loop de
+> erro (`Failed to retrieve information of the docker client and server
+> host`, mensagem vazia) num ambiente com Docker Engine recente: o
+> cliente Docker embutido nessa versão do Traefik não negocia direito
+> com uma API mais nova (`1.55`) do daemon. `traefik:latest` (resolveu
+> pra `3.7.9`) funcionou de primeira. Por isso a imagem fica **travada
+> em `traefik:v3.7.9`** (versão testada), não em `latest` — se
+> atualizar, teste de verdade antes de considerar concluído, esse tipo
+> de bug não aparece numa revisão só de código.
+
+> **2. `traefik.docker.network` é obrigatório com múltiplas redes** — o
+> `keycloak` está em duas redes Docker (`frontend` e `backend`, essa
+> última isolada). Sem informar explicitamente qual delas o Traefik deve
+> usar pra rotear, a escolha não é determinística (mapas em Go não têm
+> ordem garantida) — às vezes acerta a rede `frontend` (alcançável),
+> às vezes a `backend` (isolada, inalcançável). Sintoma real: a stack
+> respondia normalmente por alguns minutos e então travava (timeout),
+> com todos os contêineres continuando `healthy` — nenhum sinal óbvio de
+> problema em `docker compose ps`. Confirmado via `netstat` dentro do
+> contêiner do Traefik: conexão presa em `SYN_SENT` contra o IP da rede
+> errada. Corrigido com o label
+> `traefik.docker.network=keycloak_frontend` no `keycloak` **e** nomes
+> fixos pras redes (`name: keycloak_frontend` / `name: keycloak_backend`
+> no `docker-compose.yml`) — sem o nome fixo, clonar o repositório numa
+> pasta com nome diferente mudaria o prefixo que o Compose gera
+> automaticamente, e o label pararia de bater silenciosamente. Validado
+> com requisições espaçadas em ~40s por alguns minutos e um redeploy
+> completo do zero, pra garantir que não era coincidência.
+
+O `deploy.sh` faz uma checagem de roteamento pós-deploy (`curl` com
+retry contra `/realms/master/.well-known/openid-configuration`) — se ela
+avisar que o roteamento não respondeu, comece a investigar por aqui
+(`docker compose logs traefik` e o label acima).
 
 ---
 

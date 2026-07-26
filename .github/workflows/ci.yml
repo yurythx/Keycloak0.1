@@ -54,16 +54,19 @@ jobs:
       - name: hadolint no Dockerfile
         run: hadolint Dockerfile
 
-      - name: Validar sintaxe do docker-compose.yml
+      - name: Validar sintaxe do docker-compose.yml (homologacao e producao/ACME)
         run: |
           export POSTGRES_DB=keycloak POSTGRES_USER=keycloak_user \
                  KC_BOOTSTRAP_ADMIN_USERNAME=kc_admin \
                  KC_HOSTNAME=https://auth.example.gov.br \
+                 KC_HOSTNAME_FQDN=auth.example.gov.br \
                  PROXY_TRUSTED_ADDRESSES=172.16.0.0/12 \
                  AD_DOMAIN=example.local AD_DC_HOSTNAME=dc01.example.local \
                  AD_DC_IP=192.0.2.10 KC_LOG_LEVEL=INFO \
-                 KEYCLOAK_IMAGE="${IMAGE_NAME}" KEYCLOAK_IMAGE_TAG=ci
-          docker compose config --quiet
+                 KEYCLOAK_IMAGE="${IMAGE_NAME}" KEYCLOAK_IMAGE_TAG=ci \
+                 ACME_EMAIL=admin@example.gov.br
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
 
   # ---------------------------------------------------------------------------
   build-scan-push:

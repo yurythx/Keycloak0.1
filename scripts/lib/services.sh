@@ -39,7 +39,7 @@ print_services_panel() {
     postgres_ip="$(container_ip keycloak_db)"
 
     print_table_title "STACK NO AR"
-    table_row "nginx"    "$(service_status keycloak_proxy)"  "${kc_hostname:-https://<KC_HOSTNAME>}"       "${host_ip_v}:80,443"
+    table_row "traefik"  "$(service_status keycloak_traefik)" "${kc_hostname:-https://<KC_HOSTNAME>}"       "${host_ip_v}:80,443"
     table_row "keycloak" "$(service_status keycloak_server)" "${kc_hostname:-https://<KC_HOSTNAME>}/admin" "${keycloak_ip:-?}:8080 (interno)"
     table_row "postgres" "$(service_status keycloak_db)"     "sem acesso externo"                          "${postgres_ip:-?}:5432 (interno)"
     if portainer_enabled; then

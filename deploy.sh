@@ -89,12 +89,12 @@ for f in secrets/postgres_password.txt secrets/kc_admin_password.txt; do
 done
 log_ok "Segredos presentes (secrets/*.txt)"
 
-if [ -s nginx/certs/fullchain.pem ] && [ -s nginx/certs/privkey.pem ]; then
-    log_ok "Certificado TLS presente (nginx/certs/)"
-else
-    die "Certificado TLS ausente em nginx/certs/ - rode ./setup.sh (ou copie o certificado da CA da prefeitura)"
-fi
+grep -qE '^KC_HOSTNAME_FQDN=' .env 2>/dev/null || die "KC_HOSTNAME_FQDN ausente no .env - rode ./setup.sh (ele deriva isso automaticamente de KC_HOSTNAME)"
+log_ok "KC_HOSTNAME_FQDN presente no .env"
 
+# Sem checagem de arquivo de certificado aqui: o Traefik gerencia TLS
+# sozinho (autoassinado em homologacao, Let's Encrypt via ACME em producao
+# se COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml no .env).
 docker compose config --quiet || die "docker-compose.yml invalido (veja o erro acima)"
 log_ok "docker-compose.yml validado (docker compose config)"
 
@@ -130,7 +130,7 @@ if [ "$DO_BUILD" = "1" ]; then
     log_warn "Modo --build: buildando a imagem do Keycloak LOCALMENTE (nao usa o registry)"
     log_warn "Use isso so' em dev/homologacao - em producao prefira o modo padrao (pull do ghcr.io)"
 elif [ "$DO_PULL" = "1" ]; then
-    step "Baixando imagens do registry (Postgres, Nginx e Keycloak via ghcr.io)"
+    step "Baixando imagens do registry (Postgres, Traefik e Keycloak via ghcr.io)"
     if ! docker compose pull; then
         log_err "Falha ao puxar as imagens."
         log_err "Se a imagem do Keycloak for privada no GitHub Container Registry, rode:"
@@ -173,7 +173,7 @@ wait_healthy() {
 }
 
 FAILED=0
-for c in keycloak_db keycloak_server keycloak_proxy; do
+for c in keycloak_db keycloak_server keycloak_traefik; do
     wait_healthy "$c" || FAILED=1
 done
 if [ "$PORTAINER_ON" = "1" ]; then
@@ -184,6 +184,27 @@ if [ "$FAILED" = "1" ]; then
     step "Falha no deploy - ultimas linhas de log dos serviços"
     docker compose logs --tail=50
     die "Deploy falhou. Verifique os logs acima e docs/01-provisionamento.md."
+fi
+
+# -----------------------------------------------------------------------------
+step "Validando roteamento HTTPS (Traefik -> Keycloak)"
+# -----------------------------------------------------------------------------
+# Todos os contêineres "healthy" nao garante que o Traefik ja' terminou de
+# descobrir a rota do Keycloak via Docker provider - alguns segundos de
+# atraso sao normais. -k porque em homologacao o certificado e' autoassinado.
+KC_HOSTNAME_FQDN_V="$(grep -E '^KC_HOSTNAME_FQDN=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+ROUTE_OK=0
+for attempt in $(seq 1 10); do
+    code="$(curl -sk --max-time 5 -o /dev/null -w '%{http_code}' "https://${KC_HOSTNAME_FQDN_V}/realms/master/.well-known/openid-configuration" 2>/dev/null || echo 000)"
+    if [ "$code" = "200" ]; then
+        ROUTE_OK=1
+        log_ok "Roteamento OK (HTTP ${code}, tentativa ${attempt}/10)"
+        break
+    fi
+    sleep 3
+done
+if [ "$ROUTE_OK" = "0" ]; then
+    log_warn "Roteamento ainda nao respondeu apos 10 tentativas (~30s) - a stack esta healthy, mas confira 'docker compose logs traefik' e o label traefik.docker.network do keycloak"
 fi
 
 # -----------------------------------------------------------------------------

@@ -78,8 +78,9 @@ segurança em [Referência de Scripts](scripts-referencia.md#portainer).
       ```
 - [ ] **Porta de métricas (9000)**: acessível **apenas internamente**
       (rede Docker), nunca publicada no host nem proxiada publicamente
-      pelo Nginx. Prometheus/Zabbix devem coletar a partir de dentro da
-      mesma rede Docker ou via um agente rodando na própria VM.
+      pelo Traefik (não há label de roteamento pra ela). Prometheus/Zabbix
+      devem coletar a partir de dentro da mesma rede Docker ou via um
+      agente rodando na própria VM.
 
 ---
 Próximo: **[Verificação End-to-End →](verificacao-final.md)**

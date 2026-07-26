@@ -2,7 +2,7 @@
 
 Autenticação única (SSO) da prefeitura via Keycloak, com federação ao
 Active Directory (LDAPS) e integração com Intranet (Django), GLPI e
-Zabbix. Stack em Docker Compose (Postgres + Keycloak + Nginx, com
+Zabbix. Stack em Docker Compose (Postgres + Keycloak + Traefik, com
 Portainer opcional), build e publicação de imagem via CI/CD.
 
 ## Regra de ouro
@@ -19,9 +19,9 @@ validação — não pule etapas.
                           (só 80/443)
                                 │
                       ┌─────────────────┐
-                      │  Nginx (proxy)  │  ← único ponto de entrada externo
-                      │  TLS obrigatório │
-                      └────────┬────────┘
+                      │ Traefik (proxy) │  ← único ponto de entrada externo
+                      │  TLS obrigatório │     (autoassinado ou Let's
+                      └────────┬────────┘      Encrypt via ACME)
                                │ rede "frontend"
                       ┌────────┴────────┐
                       │    Keycloak     │──── LDAPS ──→ Active Directory

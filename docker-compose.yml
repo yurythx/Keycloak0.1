@@ -1,9 +1,16 @@
 networks:
   frontend:
+    name: keycloak_frontend
     driver: bridge
   backend:
+    name: keycloak_backend
     driver: bridge
     internal: true # Isola o banco de dados completamente, sem rota de saida para a internet
+    # Nomes fixos (em vez de deixar o Compose prefixar com o nome da pasta):
+    # o label "traefik.docker.network" do servico keycloak precisa apontar
+    # pro nome REAL da rede, e isso so' e' estavel se o repositorio puder
+    # ser clonado em qualquer pasta sem quebrar o roteamento (achado real -
+    # ver docs/scripts-referencia.md#traefik).
 
 volumes:
   postgres_data:
@@ -101,7 +108,7 @@ services:
       KC_TRUSTSTORE_PATHS: /opt/keycloak/certs
 
       # Management interface (health/metrics) - fica em porta separada (9000),
-      # NUNCA publicada no host nem proxiada publicamente pelo Nginx.
+      # NUNCA publicada no host nem proxiada publicamente pelo Traefik.
       KC_HEALTH_ENABLED: "true"
       KC_METRICS_ENABLED: "true"
 
@@ -123,7 +130,7 @@ services:
     # Injecao de FQDN/IP do Domain Controller do Active Directory
     extra_hosts:
       - "${AD_DC_HOSTNAME}:${AD_DC_IP}"
-    # O Keycloak nao publica portas no host! Comunicacao exclusiva via Nginx na rede frontend.
+    # O Keycloak nao publica portas no host! Comunicacao exclusiva via Traefik na rede frontend.
     healthcheck:
       # bash explicito (nao depende de /bin/sh ser bash) contra a management port 9000,
       # acessada apenas internamente pelo Docker healthcheck - nunca exposta ao host.
@@ -140,27 +147,68 @@ services:
     mem_limit: 4g
     cpus: 2.0
     logging: *default-logging
+    # Roteamento e TLS via Traefik (ver servico "traefik" abaixo). Em
+    # homologacao (sem docker-compose.prod.yml), o router pede TLS sem
+    # certresolver - o Traefik serve seu proprio certificado autoassinado
+    # interno automaticamente, sem precisar gerar/gerenciar nenhum .pem.
+    labels:
+      - "traefik.enable=true"
+      # Rede explicita: com o keycloak em 2 redes (frontend + backend), o
+      # provider Docker do Traefik pode escolher o IP errado pra rotear
+      # (mapas em Go nao garantem ordem) - sem isso o roteamento para de
+      # funcionar silenciosamente depois de alguns minutos (achado real,
+      # ver docs/scripts-referencia.md#traefik).
+      - "traefik.docker.network=keycloak_frontend"
+      - "traefik.http.services.keycloak.loadbalancer.server.port=8080"
+      # HTTP -> HTTPS (redirect permanente)
+      - "traefik.http.routers.keycloak-web.rule=Host(`${KC_HOSTNAME_FQDN}`)"
+      - "traefik.http.routers.keycloak-web.entrypoints=web"
+      - "traefik.http.routers.keycloak-web.middlewares=https-redirect@docker"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.https-redirect.redirectscheme.permanent=true"
+      # HTTPS
+      - "traefik.http.routers.keycloak.rule=Host(`${KC_HOSTNAME_FQDN}`)"
+      - "traefik.http.routers.keycloak.entrypoints=websecure"
+      - "traefik.http.routers.keycloak.tls=true"
+      - "traefik.http.routers.keycloak.middlewares=security-headers@docker"
+      # Paridade com os headers que o nginx.conf antigo injetava. SAMEORIGIN
+      # (nao DENY) de proposito: o Keycloak usa um iframe same-origin pro
+      # "status iframe" de SSO/SLO.
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=63072000"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.security-headers.headers.customFrameOptionsValue=SAMEORIGIN"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
 
   # ---------------------------------------------------------------------------
-  # Proxy Reverso Nginx (Unico Ponto de Entrada Externo)
+  # Proxy Reverso Traefik (Unico Ponto de Entrada Externo)
   # ---------------------------------------------------------------------------
-  nginx:
-    image: nginx:alpine
-    container_name: keycloak_proxy
+  # TLS automatico: autoassinado interno em homologacao (padrao), ou real
+  # via Let's Encrypt em producao (docker-compose.prod.yml, ativado pelo
+  # setup.sh). Versao travada em v3.7.9 (nao "latest"): testada e validada
+  # contra o Docker Engine deste projeto - versoes v3.3 mais antigas tem
+  # um bug real de negociacao de API com daemons Docker recentes (ver
+  # docs/scripts-referencia.md#traefik).
+  traefik:
+    image: traefik:v3.7.9
+    container_name: keycloak_traefik
     restart: unless-stopped
-    depends_on:
-      keycloak:
-        condition: service_healthy
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--api.dashboard=false"
+      - "--ping=true"
     networks:
       - frontend
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/certs:/etc/nginx/certs:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     healthcheck:
-      test: ["CMD", "nginx", "-t"]
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 15s
       timeout: 5s
       retries: 3

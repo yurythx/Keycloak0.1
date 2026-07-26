@@ -113,11 +113,13 @@ menu_stop() {
 }
 
 menu_start() {
-    if docker compose start 2>/tmp/manage_start.err; then
+    local err
+    if err="$(docker compose start 2>&1)"; then
         log_ok "Stack iniciada"
     else
         log_warn "Nao foi possivel iniciar (contêineres podem nao existir ainda)"
         log_info "Use a opcao 5 (Atualizar/redeploy) para criar a stack do zero"
+        [ -n "$err" ] && log_err "$err"
     fi
     pause
 }

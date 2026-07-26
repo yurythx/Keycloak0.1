@@ -7,7 +7,7 @@
 </a>
 <img src="https://img.shields.io/badge/Keycloak-26.7.0-00FF41?style=for-the-badge&logo=keycloak&logoColor=black&labelColor=000000" alt="Keycloak"/>
 <img src="https://img.shields.io/badge/PostgreSQL-16-00FF41?style=for-the-badge&logo=postgresql&logoColor=black&labelColor=000000" alt="PostgreSQL"/>
-<img src="https://img.shields.io/badge/Nginx-Reverse%20Proxy-00FF41?style=for-the-badge&logo=nginx&logoColor=black&labelColor=000000" alt="Nginx"/>
+<img src="https://img.shields.io/badge/Traefik-Reverse%20Proxy-00FF41?style=for-the-badge&logo=traefikproxy&logoColor=black&labelColor=000000" alt="Traefik"/>
 <img src="https://img.shields.io/badge/Docker-Compose-00FF41?style=for-the-badge&logo=docker&logoColor=black&labelColor=000000" alt="Docker"/>
 
 <img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=600&size=20&duration=3000&pause=900&color=00FF41&center=true&vCenter=true&width=650&lines=SSO+institucional+%3E+Active+Directory+(LDAPS);Federa%C3%A7%C3%A3o+%C3%BAnica+%3E+Django+%C2%B7+GLPI+%C2%B7+Zabbix;Build+fora+da+VM+%3E+CI%2FCD+%3E+Registry+%3E+Deploy;Zero+senha+em+texto+plano+%3E+secrets+versionados+fora+do+git" alt="Typing SVG"/>
@@ -19,8 +19,9 @@
 Stack de **Single Sign-On (SSO)** da prefeitura, construída sobre o
 [Keycloak](https://www.keycloak.org/), federada ao **Active Directory**
 via LDAPS e integrada à Intranet (Django), ao GLPI e ao Zabbix. Roda
-inteiramente em **Docker Compose** — Postgres + Keycloak + Nginx, com
-Portainer opcional — provisionada e operada por scripts próprios com
+inteiramente em **Docker Compose** — Postgres + Keycloak + Traefik (TLS
+automático, autoassinado em homologação ou Let's Encrypt em produção),
+com Portainer opcional — provisionada e operada por scripts próprios com
 tema visual "Matrix" no terminal.
 
 ```bash
@@ -38,9 +39,9 @@ cd /opt/keycloak-stack
                           (só 80/443)
                                 │
                       ┌─────────────────┐
-                      │  Nginx (proxy)  │  ← único ponto de entrada externo
-                      │  TLS obrigatório │
-                      └────────┬────────┘
+                      │ Traefik (proxy) │  ← único ponto de entrada externo
+                      │  TLS obrigatório │     (autoassinado ou Let's
+                      └────────┬────────┘      Encrypt via ACME)
                                │ rede "frontend"
                       ┌────────┴────────┐
                       │    Keycloak     │──── LDAPS ──→ Active Directory
@@ -63,6 +64,7 @@ cd /opt/keycloak-stack
 | 🟢 **Build fora da VM** | GitHub Actions **e** GitLab CI, lado a lado — lint, build, scan de vulnerabilidades (Trivy) e push pro registry. A VM só faz `pull`. |
 | 🟢 **Segredos fora do git** | Senhas de 32 caracteres geradas pelo `setup.sh`, montadas via Docker secrets, permissão de arquivo ajustada pro usuário não-root do Keycloak — nunca em `.env` versionado. |
 | 🟢 **Isolamento de rede real** | Postgres numa rede `internal: true`, sem rota de saída — nem o host alcança a porta 5432. |
+| 🟢 **TLS sem esforço manual** | Traefik gerencia o certificado sozinho — autoassinado em homologação, Let's Encrypt automático em produção (`docker-compose.prod.yml`, um overlay opcional). |
 | 🟢 **Console de operação** | `./manage.sh`, estilo TrueNAS: logs, reiniciar, backup, restore-drill, uso de recursos ao vivo (`docker stats`), shell no contêiner. |
 | 🟢 **Identidade visual** | Tema customizado do Keycloak (`keycloak.v2`/PatternFly 5) com logo e cores da prefeitura — ver [`docs/tema-visual.md`](docs/tema-visual.md). |
 | 🟢 **Achados reais documentados** | Cada incidente de produção (permissão de secret, `restart` vs `up -d`, certificado desatualizado após troca de domínio, HSTS travando o navegador) virou correção **e** nota na documentação — não só um patch silencioso. |

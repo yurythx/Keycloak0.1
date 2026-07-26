@@ -3,9 +3,10 @@ secrets/*
 !secrets/.gitkeep
 certs/*
 !certs/.gitkeep
-nginx/certs/*
-!nginx/certs/.gitkeep
 .env
+# Certificados do Traefik (Let's Encrypt, modo producao com
+# docker-compose.prod.yml) vivem no volume nomeado "traefik-certificates",
+# fora do repositorio - nao ha' arquivo local pra ignorar aqui.
 
 # Backups locais
 backups/

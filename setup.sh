@@ -8,7 +8,9 @@
 # Uso:
 #   ./setup.sh                 modo interativo (recomendado)
 #   ./setup.sh --yes           aceita os padroes sem perguntar (CI/automacao)
-#   ./setup.sh --self-signed   gera certificado autoassinado (SOMENTE homologacao)
+#   ./setup.sh --self-signed   forca modo homologacao (Traefik com certificado
+#                               autoassinado interno) - pula a pergunta de
+#                               Let's Encrypt mesmo combinado com --yes
 #   ./setup.sh --no-anim       desativa a animacao de abertura
 # =============================================================================
 set -euo pipefail
@@ -58,14 +60,24 @@ log_ok "openssl encontrado: $(openssl version)"
 # -----------------------------------------------------------------------------
 step "Preparando estrutura de diretorios"
 # -----------------------------------------------------------------------------
-mkdir -p secrets certs nginx/certs
-log_ok "secrets/  certs/  nginx/certs/"
+mkdir -p secrets certs
+log_ok "secrets/  certs/"
 
 # -----------------------------------------------------------------------------
 step "Configurando .env"
 # -----------------------------------------------------------------------------
 if [ -f .env ]; then
     log_info ".env ja existe - mantendo valores atuais (apague o arquivo para reconfigurar do zero)"
+    # Auto-migracao: .env de uma versao anterior a troca Nginx->Traefik nao
+    # tem KC_HOSTNAME_FQDN (usado pela regra Host() do Traefik) - derive do
+    # KC_HOSTNAME existente em vez de deixar o Traefik subir sem rota.
+    if ! grep -qE '^KC_HOSTNAME_FQDN=' .env 2>/dev/null; then
+        FQDN_MIGRATE="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | sed -E 's#^KC_HOSTNAME=https?://##' | tr -d '\r')"
+        if [ -n "$FQDN_MIGRATE" ]; then
+            printf '\nKC_HOSTNAME_FQDN=%s\n' "$FQDN_MIGRATE" >> .env
+            log_warn ".env de uma versao anterior (Nginx) - adicionado KC_HOSTNAME_FQDN=${FQDN_MIGRATE} automaticamente (necessario para o Traefik)"
+        fi
+    fi
 else
     [ -f .env.example ] || die ".env.example nao encontrado no repositorio"
     cp .env.example .env
@@ -75,6 +87,7 @@ else
     POSTGRES_USER_V=$(ask "Usuario do Postgres" "keycloak_user")
     KC_ADMIN_USER_V=$(ask "Usuario admin inicial do Keycloak" "kc_admin")
     KC_HOSTNAME_V=$(ask "Hostname publico (https://...)" "https://sso.papermoon.cloud")
+    KC_HOSTNAME_FQDN_V="$(printf '%s' "$KC_HOSTNAME_V" | sed -E 's#^https?://##')"
     PROXY_TRUSTED_V=$(ask "CIDR de rede confiavel para o proxy" "172.16.0.0/12")
     AD_DOMAIN_V=$(ask "Dominio do Active Directory" "prefeitura.local")
     AD_DC_HOST_V=$(ask "Hostname do Domain Controller" "dc01.prefeitura.local")
@@ -86,6 +99,19 @@ else
         ENABLE_PORTAINER_V="true"
     fi
 
+    # --self-signed forca homologacao (Traefik autoassinado) sem perguntar -
+    # importante porque --yes faz TODO confirm() responder "sim"
+    # automaticamente (ver confirm() em scripts/lib/theme.sh), o que sem
+    # essa guarda ligaria Let's Encrypt sem querer numa automacao/CI.
+    ACME_LINES=""
+    if [ "$SELF_SIGNED" != "1" ] && confirm "Habilitar Let's Encrypt real (producao - requer DNS publico resolvendo '${KC_HOSTNAME_FQDN_V}' para este host)?" "N"; then
+        ACME_EMAIL_V=$(ask "E-mail para o Let's Encrypt (avisos de expiracao/problemas)" "admin@${KC_HOSTNAME_FQDN_V#*.}")
+        ACME_LINES=$(printf 'ACME_EMAIL=%s\nCOMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml\n' "$ACME_EMAIL_V")
+        log_warn "Let's Encrypt ativado - confirme que '${KC_HOSTNAME_FQDN_V}' resolve por DNS publico para este host ANTES de rodar ./deploy.sh (senao o desafio ACME falha)"
+    else
+        log_info "Modo homologacao/rede interna - Traefik vai servir certificado autoassinado (nenhum arquivo pra gerenciar)"
+    fi
+
     cat > .env <<EOF
 # Gerado por setup.sh em $(date '+%F %T')
 POSTGRES_DB=${POSTGRES_DB_V}
@@ -94,8 +120,9 @@ POSTGRES_USER=${POSTGRES_USER_V}
 KC_BOOTSTRAP_ADMIN_USERNAME=${KC_ADMIN_USER_V}
 
 KC_HOSTNAME=${KC_HOSTNAME_V}
+KC_HOSTNAME_FQDN=${KC_HOSTNAME_FQDN_V}
 PROXY_TRUSTED_ADDRESSES=${PROXY_TRUSTED_V}
-
+${ACME_LINES}
 AD_DOMAIN=${AD_DOMAIN_V}
 AD_DC_HOSTNAME=${AD_DC_HOST_V}
 AD_DC_IP=${AD_DC_IP_V}
@@ -161,27 +188,18 @@ make_secret_file "secrets/postgres_password.txt" "Senha do Postgres"
 make_secret_file "secrets/kc_admin_password.txt" "Senha do admin do Keycloak"
 
 # -----------------------------------------------------------------------------
-step "Certificado TLS do Nginx (nginx/certs/)"
+step "Modo TLS (Traefik)"
 # -----------------------------------------------------------------------------
-if [ -s nginx/certs/fullchain.pem ] && [ -s nginx/certs/privkey.pem ]; then
-    HOST_FOR_CERT="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | sed -E 's#^KC_HOSTNAME=https?://##' | tr -d '\r')"
-    CERT_CN="$(openssl x509 -noout -subject -in nginx/certs/fullchain.pem 2>/dev/null | sed -E 's#.*CN\s*=\s*##')"
-    if [ -n "$HOST_FOR_CERT" ] && [ -n "$CERT_CN" ] && [ "$HOST_FOR_CERT" != "$CERT_CN" ]; then
-        log_warn "Certificado em nginx/certs/ foi emitido para '${CERT_CN}', mas KC_HOSTNAME agora e '${HOST_FOR_CERT}' - navegadores vao rejeitar (dominio nao bate). setup.sh NUNCA sobrescreve certificado existente automaticamente; se o dominio mudou de proposito, apague nginx/certs/*.pem e rode ./setup.sh de novo para gerar/copiar o certificado correto"
-    else
-        log_ok "Certificado ja presente em nginx/certs/ (CN='${CERT_CN}', bate com KC_HOSTNAME)"
-    fi
-elif [ "$SELF_SIGNED" = "1" ] || confirm "Certificado da CA da prefeitura ainda nao chegou. Gerar um autoassinado (SOMENTE para homologacao/teste)?"; then
-    HOST_FOR_CERT="$(grep -E '^KC_HOSTNAME=' .env 2>/dev/null | sed -E 's#^KC_HOSTNAME=https?://##' | tr -d '\r')"
-    HOST_FOR_CERT="${HOST_FOR_CERT:-localhost}"
-    MSYS_NO_PATHCONV=1 openssl req -x509 -nodes -newkey rsa:2048 -days 30 \
-        -keyout nginx/certs/privkey.pem -out nginx/certs/fullchain.pem \
-        -subj "/CN=${HOST_FOR_CERT}" -addext "subjectAltName=DNS:${HOST_FOR_CERT}" \
-        >/dev/null 2>&1
-    log_warn "Certificado AUTOASSINADO gerado para '${HOST_FOR_CERT}' (30 dias) - troque pelo certificado da CA corporativa antes do go-live em producao"
-    log_warn "Se o navegador ja tiver visitado este dominio via HTTPS antes (HSTS ativo, ver nginx.conf), ele pode BLOQUEAR o botao 'Avancado -> Continuar' para este certificado - limpe em chrome://net-internals/#hsts (Delete domain security policies) antes de testar"
+# Nao ha' arquivo de certificado pra gerar/checar aqui: em homologacao o
+# Traefik serve seu proprio certificado autoassinado automaticamente; em
+# producao (Let's Encrypt) ele emite e renova via ACME sozinho, guardando
+# tudo no volume nomeado "traefik-certificates" (fora do repositorio).
+if grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null; then
+    ACME_EMAIL_SHOW="$(grep -E '^ACME_EMAIL=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
+    log_ok "Producao - Let's Encrypt ativado (e-mail: ${ACME_EMAIL_SHOW:-?}). Confirme o DNS publico antes do deploy"
 else
-    log_warn "Certificado TLS pendente - copie fullchain.pem e privkey.pem para nginx/certs/ antes de rodar ./deploy.sh"
+    log_ok "Homologacao/rede interna - certificado autoassinado automatico do Traefik (aviso de seguranca esperado no navegador)"
+    log_warn "Se o navegador ja tiver visitado este dominio via HTTPS antes com HSTS ativo, ele pode BLOQUEAR o botao 'Avancado -> Continuar' - limpe em chrome://net-internals/#hsts (Delete domain security policies) antes de testar"
 fi
 
 # -----------------------------------------------------------------------------
@@ -198,17 +216,15 @@ fi
 # -----------------------------------------------------------------------------
 STATUS_ENV="OK"
 STATUS_SECRETS="OK"
-STATUS_CERT="OK"
-if [ ! -s nginx/certs/fullchain.pem ] || [ ! -s nginx/certs/privkey.pem ]; then
-    STATUS_CERT="PENDENTE"
-fi
+STATUS_TLS="homologacao (Traefik autoassinado)"
+grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null && STATUS_TLS="producao (Let's Encrypt)"
 STATUS_PORTAINER="desativado"
 grep -qE '^ENABLE_PORTAINER=true' .env 2>/dev/null && STATUS_PORTAINER="ativado (127.0.0.1:9443)"
 
 print_panel "RESUMO DO SETUP" \
     ".env ................... ${STATUS_ENV}" \
     "secrets/*.txt ........... ${STATUS_SECRETS}" \
-    "nginx/certs/*.pem ....... ${STATUS_CERT}" \
+    "TLS (Traefik) ........... ${STATUS_TLS}" \
     "Portainer ............... ${STATUS_PORTAINER}" \
     "" \
     "Proximo passo: ./deploy.sh" \

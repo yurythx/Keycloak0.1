@@ -1,0 +1,41 @@
+# Overlay de PRODUCAO REAL - ativa Let's Encrypt (ACME) no Traefik.
+#
+# So' e' usado se o .env tiver:
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml
+# (o setup.sh grava isso automaticamente quando voce responde "sim" a
+# "Habilitar Let's Encrypt real (producao)?" - ver docs/scripts-referencia.md#traefik)
+#
+# Requisitos para o ACME funcionar (desafio TLS-ALPN-01):
+#   - KC_HOSTNAME_FQDN precisa resolver por DNS PUBLICO para este host.
+#   - Portas 80 e 443 alcancaveis da internet (o desafio HTTP/TLS do
+#     Let's Encrypt acontece nessas portas).
+# Sem DNS publico (rede interna/homologacao), NAO ative isso - deixe o
+# .env sem COMPOSE_FILE e o Traefik serve certificado autoassinado.
+#
+# Nota de merge do Compose: "command:" e' substituido POR INTEIRO quando
+# ha' override (regra de merge do Compose para chaves de valor unico) -
+# por isso repetimos aqui as flags base + as novas de ACME, em vez de so'
+# as novas. "labels:" e "volumes:" fazem merge aditivo normalmente.
+
+services:
+  traefik:
+    command:
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--api.dashboard=false"
+      - "--ping=true"
+      - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
+      - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    volumes:
+      - traefik-certificates:/letsencrypt
+
+  keycloak:
+    labels:
+      - "traefik.http.routers.keycloak.tls.certresolver=myresolver"
+
+volumes:
+  traefik-certificates:
+    driver: local
