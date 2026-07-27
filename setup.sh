@@ -89,8 +89,8 @@ else
     KC_HOSTNAME_V=$(ask "Hostname publico (https://...)" "https://sso.rondonopolis.mt.gov.br")
     KC_HOSTNAME_FQDN_V="$(printf '%s' "$KC_HOSTNAME_V" | sed -E 's#^https?://##')"
     PROXY_TRUSTED_V=$(ask "CIDR de rede confiavel para o proxy" "172.16.0.0/12")
-    AD_DOMAIN_V=$(ask "Dominio do Active Directory" "prefeitura.local")
-    AD_DC_HOST_V=$(ask "Hostname do Domain Controller" "dc01.prefeitura.local")
+    AD_DOMAIN_V=$(ask "Dominio do Active Directory" "rondonopolis.local")
+    AD_DC_HOST_V=$(ask "Hostname do Domain Controller" "dc01.rondonopolis.local")
     AD_DC_IP_V=$(ask "IP do Domain Controller" "192.168.1.10")
     KC_LOG_LEVEL_V=$(ask "Nivel de log do Keycloak" "INFO")
 

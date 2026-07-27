@@ -37,14 +37,14 @@ plano no `.env`), Users DN e Groups DN — com valores padrão derivados de
 
 **Manual (alternativa)**, via Admin Console → realm `prefeitura` →
 **User Federation → Add LDAP**:
-- Connection URL: `ldaps://dc01.prefeitura.local:636`
-- Bind DN: `CN=svc-keycloak,OU=ServiceAccounts,DC=prefeitura,DC=local`
+- Connection URL: `ldaps://dc01.rondonopolis.local:636`
+- Bind DN: `CN=svc-keycloak,OU=ServiceAccounts,DC=rondonopolis,DC=local`
 - Edit Mode: `READ_ONLY`
 
 ### 3. Mapear os grupos
 O script já cria o mapper `group-ldap-mapper` automaticamente. Se feito
 manualmente, adicione um mapper `group-ldap-mapper` apontando para
-`OU=Grupos,DC=prefeitura,DC=local`.
+`OU=Grupos,DC=rondonopolis,DC=local`.
 
 ## Portão de Validação
 

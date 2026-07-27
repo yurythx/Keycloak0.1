@@ -24,7 +24,7 @@ camada de defesa.
 ### 3. Conta de serviço do Active Directory
 Solicitar à equipe do AD a criação de uma conta de serviço, por exemplo:
 ```
-CN=svc-keycloak,OU=ServiceAccounts,DC=prefeitura,DC=local
+CN=svc-keycloak,OU=ServiceAccounts,DC=rondonopolis,DC=local
 ```
 Com permissão **somente leitura** (bind/consulta) — sem privilégios
 administrativos no domínio. Essa conta é usada na

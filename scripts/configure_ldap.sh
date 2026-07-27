@@ -62,10 +62,10 @@ fi
 
 REALM_V=$(ask "Realm do Keycloak" "prefeitura")
 PROVIDER_NAME_V=$(ask "Nome do provider LDAP (identificador interno)" "ldap-ad")
-LDAP_URL_V=$(ask "Connection URL do AD" "ldaps://${AD_DC_HOSTNAME:-dc01.prefeitura.local}:636")
-BIND_DN_V=$(ask "Bind DN (conta de servico, somente leitura)" "CN=svc-keycloak,OU=ServiceAccounts,${DEFAULT_DC:-DC=prefeitura,DC=local}")
-USERS_DN_V=$(ask "Users DN (onde estao as contas dos servidores)" "OU=Usuarios,${DEFAULT_DC:-DC=prefeitura,DC=local}")
-GROUPS_DN_V=$(ask "Groups DN (onde estao os grupos)" "OU=Grupos,${DEFAULT_DC:-DC=prefeitura,DC=local}")
+LDAP_URL_V=$(ask "Connection URL do AD" "ldaps://${AD_DC_HOSTNAME:-dc01.rondonopolis.local}:636")
+BIND_DN_V=$(ask "Bind DN (conta de servico, somente leitura)" "CN=svc-keycloak,OU=ServiceAccounts,${DEFAULT_DC:-DC=rondonopolis,DC=local}")
+USERS_DN_V=$(ask "Users DN (onde estao as contas dos servidores)" "OU=Usuarios,${DEFAULT_DC:-DC=rondonopolis,DC=local}")
+GROUPS_DN_V=$(ask "Groups DN (onde estao os grupos)" "OU=Grupos,${DEFAULT_DC:-DC=rondonopolis,DC=local}")
 
 BIND_PW_FILE="secrets/ldap_bind_password.txt"
 if [ -s "$BIND_PW_FILE" ]; then
