@@ -214,6 +214,15 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--api.dashboard=false"
       - "--ping=true"
+      # Metricas Prometheus no entrypoint interno "traefik" (o mesmo do
+      # --ping acima - criado automaticamente pelo proprio Traefik, sem
+      # precisar declarar "--entrypoints.traefik.address"). NUNCA publicado
+      # em "ports:" - mesma postura da management port 9000 do Keycloak,
+      # so' acessivel de dentro da rede Docker (Zabbix/Prometheus coletam
+      # de dentro da mesma rede ou via agente na propria VM - ver
+      # docs/monitoramento.md).
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entryPoint=traefik"
     networks:
       - frontend
     ports:

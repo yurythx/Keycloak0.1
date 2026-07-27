@@ -17,6 +17,7 @@ entrega tudo executável.
 | [`scripts/install_console_menu.sh`](#scriptsinstall_console_menush) | Menu automático no login | Opcional, uma vez |
 | [`scripts/backup.sh`](#scriptsbackupsh) | Backup lógico do Postgres | Etapa 5, via cron |
 | [`scripts/restore_test.sh`](#scriptsrestore_testsh) | Drill de restauração | Etapa 5, sob demanda |
+| [`scripts/session_stats.sh`](#scriptssession_statssh) | Sessões ativas (API Admin) | Monitoramento, sob demanda ou via Zabbix |
 
 ---
 
@@ -395,7 +396,17 @@ Uso recomendado via cron (ver [Etapa 5](05-golive-operacao.md)):
 ```
 
 Variáveis de ambiente: `BACKUP_DIR` (padrão `/mnt/backup_nfs`),
-`RETENTION_DAYS` (padrão `14`).
+`RETENTION_DAYS` (padrão `14`), `REQUIRE_EXTERNAL_BACKUP` (padrão `1`).
+
+> **Recusa rodar se `BACKUP_DIR` estiver no mesmo disco da raiz do
+> sistema** (compara via `stat -c %d`, não só se é um "mountpoint"
+> exato — cobre também uma subpasta dentro do ponto de montagem
+> externo). Sem isso, se o NFS/disco externo nunca tivesse sido montado
+> (ou caísse), o script continuaria escrevendo silenciosamente no disco
+> local até enchê-lo — o próprio risco que o backup existe pra mitigar.
+> `REQUIRE_EXTERNAL_BACKUP=0` permite prosseguir mesmo assim (só
+> homologação/teste, nunca produção). Testado ao vivo nos dois ramos —
+> ver [Monitoramento e Backup Externo](monitoramento.md).
 
 ---
 
@@ -414,3 +425,22 @@ produção em nenhum momento.
 Sai com `PASS` e a contagem de tabelas restauradas se tudo der certo, ou
 mensagem de erro clara se o dump estiver corrompido ou a restauração
 falhar.
+
+---
+
+## `scripts/session_stats.sh`
+
+Sessões ativas por client, via API Admin do Keycloak
+(`GET /admin/realms/{realm}/client-session-stats`) — o `/metrics`
+nativo do Keycloak não expõe contagem de sessões, só métricas de
+infraestrutura (ver [Monitoramento](monitoramento.md) para o porquê).
+
+```bash
+./scripts/session_stats.sh                    # tabela do realm "prefeitura"
+./scripts/session_stats.sh master              # tabela de outro realm
+./scripts/session_stats.sh prefeitura --total  # so' o numero (Zabbix UserParameter)
+```
+
+Mesmo padrão de autenticação via `kcadm.sh` já usado em
+`scripts/configure_ldap.sh`. Testado ao vivo: autenticação real,
+consulta ao realm `master`, tabela e modo `--total` conferidos.

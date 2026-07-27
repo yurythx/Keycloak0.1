@@ -28,6 +28,8 @@ services:
       - "--entrypoints.websecure.address=:443"
       - "--api.dashboard=false"
       - "--ping=true"
+      - "--metrics.prometheus=true"
+      - "--metrics.prometheus.entryPoint=traefik"
       - "--certificatesresolvers.myresolver.acme.tlschallenge=true"
       - "--certificatesresolvers.myresolver.acme.email=${ACME_EMAIL}"
       - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"

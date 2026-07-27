@@ -17,6 +17,25 @@ POSTGRES_DB="${POSTGRES_DB:-keycloak}"
 POSTGRES_USER="${POSTGRES_USER:-keycloak_user}"
 
 mkdir -p "$BACKUP_DIR"
+
+# Garante que o backup nao esta indo pro mesmo disco/particao da raiz do
+# sistema (comparando o device ID via "stat -c %d") - se BACKUP_DIR nao
+# for um armazenamento realmente separado (NFS, disco extra, etc.), o
+# proposito do backup (sobreviver a um disco cheio/corrompido da VM) fica
+# comprometido, e silenciosamente: o mkdir -p acima teria criado a pasta
+# no disco local sem avisar nada. Comparar o device (nao so' checar se e'
+# um "mountpoint") cobre tambem o caso de BACKUP_DIR ser uma subpasta
+# dentro do ponto de montagem externo, nao so' a raiz exata dele.
+ROOT_DEV="$(stat -c %d / 2>/dev/null || echo "")"
+BACKUP_DEV="$(stat -c %d "$BACKUP_DIR" 2>/dev/null || echo "")"
+if [ -n "$ROOT_DEV" ] && [ "$ROOT_DEV" = "$BACKUP_DEV" ]; then
+    echo "[$(date '+%F %T')] AVISO: BACKUP_DIR (${BACKUP_DIR}) esta no mesmo disco da raiz do sistema - NAO e' armazenamento externo" >&2
+    if [ "${REQUIRE_EXTERNAL_BACKUP:-1}" != "0" ]; then
+        echo "[$(date '+%F %T')] ERRO: abortando para nao arriscar encher o disco da VM. Monte um armazenamento externo (NFS/disco separado) em ${BACKUP_DIR}, ou defina REQUIRE_EXTERNAL_BACKUP=0 para permitir backup local mesmo assim (NAO recomendado em producao)" >&2
+        exit 1
+    fi
+fi
+
 OUT_FILE="${BACKUP_DIR}/keycloak_${DATE}.sql.gz"
 TMP_FILE="${OUT_FILE}.part"
 

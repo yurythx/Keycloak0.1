@@ -21,8 +21,22 @@ crontab -e
 ```
 0 2 * * * /opt/keycloak-stack/scripts/backup.sh >> /var/log/keycloak-backup.log 2>&1
 ```
-O script já cuida de compressão, checagem de erro e retenção. Detalhes em
+O script já cuida de compressão, checagem de erro, retenção **e recusa
+rodar se `BACKUP_DIR` estiver no mesmo disco da raiz do sistema**
+(garante que o backup vai para armazenamento externo de verdade, não
+só por convenção de nome de pasta — ver
+[Monitoramento e Backup Externo](monitoramento.md)). Configure o
+`BACKUP_DIR` (padrão `/mnt/backup_nfs`) como um ponto de montagem real
+antes de agendar o cron. Detalhes em
 [Referência de Scripts](scripts-referencia.md#scriptsbackupsh).
+
+### Métricas para Zabbix/Prometheus
+`KC_METRICS_ENABLED=true` (Keycloak) e `--metrics.prometheus` (Traefik)
+já vêm ativados por padrão nesta stack — nenhuma configuração extra
+necessária pra começar a coletar. Endpoints, o que cada um realmente
+expõe (e o que não expõe, como sessões ativas — cobertas por
+`scripts/session_stats.sh`) e receitas de integração com Zabbix estão
+em [Monitoramento e Backup Externo](monitoramento.md).
 
 ### 4. Rotação da senha do admin (`kc_admin`)
 
@@ -76,11 +90,15 @@ segurança em [Referência de Scripts](scripts-referencia.md#portainer).
       ```bash
       docker inspect keycloak_server --format='{{json .HostConfig.LogConfig}}'
       ```
-- [ ] **Porta de métricas (9000)**: acessível **apenas internamente**
-      (rede Docker), nunca publicada no host nem proxiada publicamente
-      pelo Traefik (não há label de roteamento pra ela). Prometheus/Zabbix
-      devem coletar a partir de dentro da mesma rede Docker ou via um
-      agente rodando na própria VM.
+- [ ] **Porta de métricas (Keycloak 9000, Traefik 8080)**: acessíveis
+      **apenas internamente** (rede Docker), nunca publicadas no host
+      nem roteadas publicamente pelo Traefik. Prometheus/Zabbix devem
+      coletar a partir de dentro da mesma rede Docker ou via um agente
+      rodando na própria VM (ver [Monitoramento](monitoramento.md)).
+- [ ] **Backup em armazenamento externo**: rodar `scripts/backup.sh` uma
+      vez e confirmar que ele **não** aborta com o aviso de "mesmo disco
+      da raiz do sistema" — se abortar, `BACKUP_DIR` ainda não está
+      apontando para um ponto de montagem externo de verdade.
 
 ---
 Próximo: **[Verificação End-to-End →](verificacao-final.md)**
