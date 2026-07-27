@@ -38,7 +38,7 @@ O proxy reverso é o [Traefik](https://traefik.io/) — três modos:
   `setup.sh`, o Traefik emite e renova sozinho via ACME (requer DNS
   público — ver [Etapa 0](00-pre-requisitos.md)).
 - **Certificado próprio da CA da prefeitura**: copie
-  `fullchain.pem`/`privkey.pem` para `certs/tls/` e rode `./setup.sh`
+  `fullchain.pem`/`privkey.pem` para `traefik/certs/` e rode `./setup.sh`
   de novo — ele detecta os arquivos, confere se batem com o
   `KC_HOSTNAME`, e configura o Traefik pra servir esse certificado (ver
   [Referência de Scripts](scripts-referencia.md#traefik)).
@@ -46,7 +46,7 @@ O proxy reverso é o [Traefik](https://traefik.io/) — três modos:
 O outro arquivo que ainda é copiado manualmente aqui é:
 - `certs/ad-ca.pem` — CA do AD (pode ser feito já aqui ou só na
   [Etapa 3](03-federacao-ad.md), quando for configurar a federação). Não
-  confundir com `certs/tls/` acima: um é a CA do Active Directory (pro
+  confundir com `traefik/certs/` acima: um é a CA do Active Directory (pro
   Keycloak confiar no LDAPS), o outro é o certificado do próprio Traefik
   — arquivos e finalidades completamente diferentes, mesma pasta `certs/`
   só por organização.

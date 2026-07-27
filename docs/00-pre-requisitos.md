@@ -45,7 +45,7 @@ certificado TLS — três modos possíveis, escolha o que se aplica:
   prefeitura** (o caminho mais comum quando o domínio só resolve na rede
   interna, como `sso.papermoon.cloud` hoje): não precisa de DNS público
   nem de Let's Encrypt — só copiar `fullchain.pem`/`privkey.pem` em
-  `certs/tls/` e rodar `./setup.sh` de novo. Ver
+  `traefik/certs/` e rodar `./setup.sh` de novo. Ver
   [Referência de Scripts](scripts-referencia.md#traefik).
 
 Nos três casos **nenhum arquivo é obrigatório antes do primeiro

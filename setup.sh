@@ -60,8 +60,8 @@ log_ok "openssl encontrado: $(openssl version)"
 # -----------------------------------------------------------------------------
 step "Preparando estrutura de diretorios"
 # -----------------------------------------------------------------------------
-mkdir -p secrets certs certs/tls traefik/dynamic-certs
-log_ok "secrets/  certs/  certs/tls/  traefik/dynamic-certs/"
+mkdir -p secrets certs traefik/certs
+log_ok "secrets/  certs/  traefik/certs/"
 
 # -----------------------------------------------------------------------------
 step "Configurando .env"
@@ -191,16 +191,18 @@ make_secret_file "secrets/kc_admin_password.txt" "Senha do admin do Keycloak"
 step "Modo TLS (Traefik)"
 # -----------------------------------------------------------------------------
 # Tres modos, checados nesta ordem de prioridade:
-#   1. Certificado proprio em certs/tls/ (CA interna/corporativa da
+#   1. Certificado proprio em traefik/certs/ (CA interna/corporativa da
 #      prefeitura) - se presente, gera o dynamic config do Traefik
-#      (provider "file") apontando pra ele. Detectado por SNI
-#      automaticamente, sem precisar de label extra no keycloak.
+#      (provider "file", na mesma pasta) apontando pra ele. Detectado por
+#      SNI automaticamente, sem precisar de label extra no keycloak.
+#      (Nao confundir com certs/ad-ca.pem - CA do Active Directory, pro
+#      Keycloak confiar no LDAPS, assunto totalmente diferente.)
 #   2. Let's Encrypt real (docker-compose.prod.yml, COMPOSE_FILE no .env).
 #   3. Homologacao - autoassinado automatico do proprio Traefik.
-CUSTOM_CERT_DIR="certs/tls"
+CUSTOM_CERT_DIR="traefik/certs"
 CUSTOM_CERT_FILE="${CUSTOM_CERT_DIR}/fullchain.pem"
 CUSTOM_KEY_FILE="${CUSTOM_CERT_DIR}/privkey.pem"
-DYNAMIC_TLS_FILE="traefik/dynamic-certs/tls.yml"
+DYNAMIC_TLS_FILE="${CUSTOM_CERT_DIR}/tls.yml"
 
 if [ -s "$CUSTOM_CERT_FILE" ] && [ -s "$CUSTOM_KEY_FILE" ]; then
     HOST_FOR_CERT="$(grep -E '^KC_HOSTNAME_FQDN=' .env 2>/dev/null | cut -d= -f2- | tr -d '\r')"
@@ -214,8 +216,8 @@ if [ -s "$CUSTOM_CERT_FILE" ] && [ -s "$CUSTOM_KEY_FILE" ]; then
     cat > "$DYNAMIC_TLS_FILE" <<EOF
 tls:
   certificates:
-    - certFile: /certs/tls/fullchain.pem
-      keyFile: /certs/tls/privkey.pem
+    - certFile: /etc/traefik/certs/fullchain.pem
+      keyFile: /etc/traefik/certs/privkey.pem
 EOF
     if [ -n "$HOST_FOR_CERT" ] && [ -n "$CERT_CN" ] && [ "$HOST_FOR_CERT" != "$CERT_CN" ]; then
         log_warn "Certificado proprio ativo em ${CUSTOM_CERT_DIR}/, mas foi emitido para '${CERT_CN}' e KC_HOSTNAME_FQDN e' '${HOST_FOR_CERT}' - navegadores vao rejeitar (dominio nao bate). Confira se e' o arquivo certo"
@@ -248,7 +250,7 @@ fi
 STATUS_ENV="OK"
 STATUS_SECRETS="OK"
 STATUS_TLS="homologacao (Traefik autoassinado)"
-if [ -s certs/tls/fullchain.pem ] && [ -s certs/tls/privkey.pem ]; then
+if [ -s traefik/certs/fullchain.pem ] && [ -s traefik/certs/privkey.pem ]; then
     STATUS_TLS="certificado proprio (CA da prefeitura)"
 elif grep -qE '^COMPOSE_FILE=.*docker-compose\.prod\.yml' .env 2>/dev/null; then
     STATUS_TLS="producao (Let's Encrypt)"

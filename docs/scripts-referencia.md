@@ -193,7 +193,7 @@ momento pra reavaliar):
 
 | Modo | Como ativa | Certificado |
 |---|---|---|
-| Certificado próprio (CA da prefeitura) | Copiar `fullchain.pem`/`privkey.pem` para `certs/tls/` e rodar `./setup.sh` de novo | O que você forneceu — sem ACME, sem DNS público |
+| Certificado próprio (CA da prefeitura) | Copiar `fullchain.pem`/`privkey.pem` para `traefik/certs/` e rodar `./setup.sh` de novo | O que você forneceu — sem ACME, sem DNS público |
 | Produção com Let's Encrypt | `COMPOSE_FILE=docker-compose.yml:docker-compose.prod.yml` no `.env` (setup.sh grava isso ao responder "sim" pra Let's Encrypt) | Let's Encrypt via ACME, emitido e renovado sozinho |
 | Homologação/rede interna (padrão) | Nada a fazer — é o padrão quando nenhum dos dois acima se aplica | Autoassinado, gerado automaticamente pelo próprio Traefik |
 
@@ -214,21 +214,30 @@ próprio nesse caso.
 Alternativa ao Let's Encrypt pra quem tem um certificado emitido pela CA
 da própria prefeitura (cenário comum em rede interna, sem DNS público).
 Mecanismo: o Traefik roda com o **provider "file"** sempre ativo
-(`--providers.file.directory=/etc/traefik/dynamic-certs`, observando a
-pasta continuamente), além do provider Docker. O `setup.sh`, ao detectar
-`certs/tls/fullchain.pem` e `certs/tls/privkey.pem`, gera
-`traefik/dynamic-certs/tls.yml`:
+(`--providers.file.directory=/etc/traefik/certs`, observando a pasta
+continuamente), além do provider Docker. Uma única pasta —
+**`traefik/certs/`** — guarda tanto o certificado/chave em si quanto o
+dynamic config gerado (o provider "file" só lê `*.yml`/`*.yaml`/`*.toml`,
+então os `.pem` ao lado não interferem; não tem necessidade de separar
+"dado" e "config apontando pro dado" em pastas diferentes). O `setup.sh`,
+ao detectar `traefik/certs/fullchain.pem` e `traefik/certs/privkey.pem`,
+gera `traefik/certs/tls.yml`:
 ```yaml
 tls:
   certificates:
-    - certFile: /certs/tls/fullchain.pem
-      keyFile: /certs/tls/privkey.pem
+    - certFile: /etc/traefik/certs/fullchain.pem
+      keyFile: /etc/traefik/certs/privkey.pem
 ```
 O Traefik registra esse certificado na store de TLS e passa a servi-lo
 por **SNI** pra qualquer conexão em `sso.papermoon.cloud` — não precisa
 de label extra no `keycloak` nem de flag no `deploy.sh`, é automático.
-Sem esse arquivo, o Traefik cai de volta no certificado autoassinado
+Sem esses arquivos, o Traefik cai de volta no certificado autoassinado
 próprio (`CN=TRAEFIK DEFAULT CERT`).
+
+> Não confundir com `certs/ad-ca.pem` (pasta `certs/` na raiz, sem ser
+> dentro de `traefik/`) — aquele é a CA do Active Directory, montado no
+> contêiner do **Keycloak** pra confiar no LDAPS; assunto e contêiner
+> totalmente diferentes, só compartilham o nome genérico "certs".
 
 Igual ao antigo comportamento do Nginx, o `setup.sh` confere se o `CN`
 do certificado bate com `KC_HOSTNAME_FQDN` e avisa em caso de
@@ -249,7 +258,7 @@ descompasso — mas **não sobrescreve** os arquivos automaticamente
 >
 > Validado ao vivo de ponta a ponta: certificado de teste gerado com
 > `subject=CN=sso.papermoon.cloud, O=Prefeitura (CA de teste)`, colocado
-> em `certs/tls/`, `setup.sh` detectou e confirmou o CN batendo,
+> em `traefik/certs/`, `setup.sh` detectou e confirmou o CN batendo,
 > `docker compose up -d --force-recreate traefik` e o `openssl s_client`
 > confirmou o Traefik servindo **esse** certificado (não mais
 > `TRAEFIK DEFAULT CERT`) — depois removido, confirmando que o Traefik

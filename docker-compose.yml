@@ -190,11 +190,13 @@ services:
   #   2. Producao com Let's Encrypt: docker-compose.prod.yml (overlay,
   #      exige DNS publico) - ativado pelo setup.sh.
   #   3. Certificado proprio (CA interna/corporativa da prefeitura): copie
-  #      fullchain.pem/privkey.pem para certs/tls/ e rode ./setup.sh de
-  #      novo - ele gera o dynamic config do Traefik (provider "file")
-  #      apontando pra eles. Nao usa ACME nem precisa de DNS publico.
-  #      Detectado automaticamente por SNI - nao precisa de label extra
-  #      no keycloak nem de flag no deploy.sh.
+  #      fullchain.pem/privkey.pem para traefik/certs/ e rode ./setup.sh
+  #      de novo - ele gera o dynamic config do Traefik (provider "file",
+  #      tambem em traefik/certs/) apontando pra eles. Nao usa ACME nem
+  #      precisa de DNS publico. Detectado automaticamente por SNI - nao
+  #      precisa de label extra no keycloak nem de flag no deploy.sh.
+  #      (certs/, sem ser dentro de traefik/, e' so' pra CA do Active
+  #      Directory - certs/ad-ca.pem - assunto diferente, ver Etapa 3.)
   # Versao travada em v3.7.9 (nao "latest"): testada e validada contra o
   # Docker Engine deste projeto - versoes v3.3 mais antigas tem um bug
   # real de negociacao de API com daemons Docker recentes (ver
@@ -206,7 +208,7 @@ services:
     command:
       - "--providers.docker=true"
       - "--providers.docker.exposedbydefault=false"
-      - "--providers.file.directory=/etc/traefik/dynamic-certs"
+      - "--providers.file.directory=/etc/traefik/certs"
       - "--providers.file.watch=true"
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
@@ -219,8 +221,12 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./traefik/dynamic-certs:/etc/traefik/dynamic-certs:ro
-      - ./certs/tls:/certs/tls:ro
+      # Pasta unica: guarda o dynamic config (tls.yml, se o modo "certificado
+      # proprio" estiver ativo) E o certificado/chave em si - nao ha' motivo
+      # pra separar config e dado em pastas diferentes so' porque um e' YAML
+      # e o outro e' PEM (o provider "file" do Traefik so' le *.yml/*.yaml/
+      # *.toml, entao misturar os .pem aqui nao confunde ele).
+      - ./traefik/certs:/etc/traefik/certs:ro
     healthcheck:
       test: ["CMD", "traefik", "healthcheck", "--ping"]
       interval: 15s

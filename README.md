@@ -64,7 +64,7 @@ cd /opt/keycloak-stack
 | 🟢 **Build fora da VM** | GitHub Actions **e** GitLab CI, lado a lado — lint, build, scan de vulnerabilidades (Trivy) e push pro registry. A VM só faz `pull`. |
 | 🟢 **Segredos fora do git** | Senhas de 32 caracteres geradas pelo `setup.sh`, montadas via Docker secrets, permissão de arquivo ajustada pro usuário não-root do Keycloak — nunca em `.env` versionado. |
 | 🟢 **Isolamento de rede real** | Postgres numa rede `internal: true`, sem rota de saída — nem o host alcança a porta 5432. |
-| 🟢 **TLS sem esforço manual** | Traefik gerencia o certificado — autoassinado em homologação, Let's Encrypt automático em produção com DNS público, ou certificado próprio da CA da prefeitura (só copiar em `certs/tls/`) quando o domínio é só interno. |
+| 🟢 **TLS sem esforço manual** | Traefik gerencia o certificado — autoassinado em homologação, Let's Encrypt automático em produção com DNS público, ou certificado próprio da CA da prefeitura (só copiar em `traefik/certs/`) quando o domínio é só interno. |
 | 🟢 **Console de operação** | `./manage.sh`, estilo TrueNAS: logs, reiniciar, backup, restore-drill, uso de recursos ao vivo (`docker stats`), shell no contêiner. |
 | 🟢 **Identidade visual** | Tema customizado do Keycloak (`keycloak.v2`/PatternFly 5) com logo e cores da prefeitura — ver [`docs/tema-visual.md`](docs/tema-visual.md). |
 | 🟢 **Achados reais documentados** | Cada incidente de produção (permissão de secret, `restart` vs `up -d`, certificado desatualizado após troca de domínio, HSTS travando o navegador) virou correção **e** nota na documentação — não só um patch silencioso. |
