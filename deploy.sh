@@ -126,6 +126,41 @@ if [ "$DO_DOWN" = "1" ]; then
 fi
 
 # -----------------------------------------------------------------------------
+step "Verificando conflitos de porta"
+# -----------------------------------------------------------------------------
+# So' importa aqui, nao no "Checagens de pre-voo" acima: nao faz sentido
+# checar porta livre antes de um "--down" (nao vai subir nada), e um
+# redeploy normal (stack ja rodando) sempre "ocupa" 80/443/9443 com o
+# proprio conteiner desta stack - isso nao e' conflito nenhum, "docker
+# compose up" so' recria no lugar. So' e' um problema real se a porta
+# estiver ocupada por outra coisa, fora desta stack (ex.: um Apache
+# esquecido rodando na VM "isolada" que devia estar so' com este servico).
+port_in_use() {
+    local port="$1"
+    if command -v ss >/dev/null 2>&1; then
+        ss -tln 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}\$"
+    else
+        # Fallback sem dependencia extra (ss pode faltar em imagens minimas):
+        # tenta abrir uma conexao TCP - sucesso = algo esta escutando.
+        (exec 3<>"/dev/tcp/127.0.0.1/${port}") 2>/dev/null
+    fi
+}
+
+check_port() {
+    local port="$1" label="$2" container="$3"
+    docker inspect "$container" >/dev/null 2>&1 && return 0
+    port_in_use "$port" || return 0
+    die "Porta ${port} (${label}) ja esta em uso por outro processo nesta maquina, fora desta stack - confira com 'ss -tlnp | grep :${port}:' (root pra ver qual processo) antes de continuar"
+}
+
+check_port 80 "Traefik HTTP" keycloak_traefik
+check_port 443 "Traefik HTTPS" keycloak_traefik
+if [ "$PORTAINER_ON" = "1" ]; then
+    check_port 9443 "Portainer" portainer
+fi
+log_ok "Nenhum conflito de porta detectado"
+
+# -----------------------------------------------------------------------------
 if [ "$DO_BUILD" = "1" ]; then
     log_warn "Modo --build: buildando a imagem do Keycloak LOCALMENTE (nao usa o registry)"
     log_warn "Use isso so' em dev/homologacao - em producao prefira o modo padrao (pull do ghcr.io)"

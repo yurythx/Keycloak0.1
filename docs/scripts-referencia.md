@@ -91,6 +91,19 @@ falhar, imprime os últimos logs automaticamente.
 O Portainer (se `ENABLE_PORTAINER=true` no `.env`) é ativado/desativado
 automaticamente via profile do Compose — não precisa de flag para isso.
 
+> **Checagem de conflito de porta**: antes de subir a stack, o
+> `deploy.sh` confere se `80`/`443` (e `9443`, se o Portainer estiver
+> ativado) já estão ocupadas por **outro processo, fora desta stack**
+> nesta máquina — falha cedo com uma mensagem clara em vez do erro
+> genérico do Docker (`bind: address already in use`). Um redeploy
+> normal (a própria stack já rodando) não dispara isso — a checagem
+> só considera conflito real se o contêiner desta stack ainda não
+> existir e a porta já estiver em uso mesmo assim (ex.: alguém deixou
+> um Apache/Nginx de teste rodando numa VM que devia estar dedicada só
+> a este serviço). Testado ao vivo simulando os dois casos: redeploy
+> normal (sem falso positivo) e um processo de fato ocupando a porta 80
+> (aborta com `exit 1`, nenhum contêiner chega a ser criado).
+
 Em **sessão interativa** (terminal de verdade), ao final de um deploy com
 sucesso o [`./manage.sh`](#managesh) abre automaticamente, pra você já
 cair direto no console de gerenciamento. Use `--no-menu` pra desativar
