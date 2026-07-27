@@ -72,7 +72,7 @@ IP:porta interno.
       outra máquina da rede local — a conexão deve ser **recusada**
       (Postgres não publica porta no host e a rede `backend` é
       `internal: true`).
-- [ ] **Handshake TLS**: acessar `https://auth.prefeitura.gov.br/` no
+- [ ] **Handshake TLS**: acessar `https://sso.rondonopolis.mt.gov.br/` no
       navegador — tela de login do Keycloak carrega. Em homologação
       (autoassinado) o aviso de "conexão não é segura" é esperado; em
       produção com Let's Encrypt ativado, deve carregar sem avisos.

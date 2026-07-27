@@ -9,7 +9,7 @@ validando SSO (login único) e SLO (logout único) de ponta a ponta.
 
 ### 1. Intranet Django (OIDC)
 - Client `intranet-django` no Keycloak, callback
-  `https://intranet.prefeitura.gov.br/oidc/callback/`.
+  `https://intranet.rondonopolis.mt.gov.br/oidc/callback/`.
 - Biblioteca `mozilla-django-oidc`, configurada em `settings.py`.
 
 ### 2. GLPI (OIDC)
@@ -29,7 +29,7 @@ validando SSO (login único) e SLO (logout único) de ponta a ponta.
   "OpenID Connect" no menu — se não aparecer SAML, a versão do Zabbix
   precisa de upgrade, mínimo recomendado 6.0+).
 - IdP metadata do Keycloak:
-  `https://auth.prefeitura.gov.br/realms/prefeitura/protocol/saml/descriptor`
+  `https://sso.rondonopolis.mt.gov.br/realms/prefeitura/protocol/saml/descriptor`
 - Habilitar provisionamento Just-In-Time (JIT).
 
 ## Portão de Validação

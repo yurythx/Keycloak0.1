@@ -218,10 +218,11 @@ certificado Let's Encrypt fica guardado, fora do repositório), e ao
 compose base. Produção real com Let's Encrypt **exige DNS público**
 resolvendo `KC_HOSTNAME_FQDN` para esta VM, com as portas 80/443
 alcançáveis da internet (é onde o desafio ACME acontece) — sem isso a
-emissão do certificado falha. Se o domínio só existe na rede interna da
-prefeitura (`sso.papermoon.cloud` hoje resolve pra um IP privado), esse
+emissão do certificado falha. Se `sso.rondonopolis.mt.gov.br` só resolver
+na rede interna da prefeitura (sem DNS público apontando pra fora), esse
 modo **não é viável** sem expor a VM publicamente — use o certificado
-próprio nesse caso.
+próprio nesse caso. Confirme com o time de rede da prefeitura qual é o
+caso antes de escolher o modo no `setup.sh`.
 
 ### Certificado próprio (CA interna/corporativa da prefeitura)
 
@@ -243,7 +244,7 @@ tls:
       keyFile: /etc/traefik/certs/privkey.pem
 ```
 O Traefik registra esse certificado na store de TLS e passa a servi-lo
-por **SNI** pra qualquer conexão em `sso.papermoon.cloud` — não precisa
+por **SNI** pra qualquer conexão em `sso.rondonopolis.mt.gov.br` — não precisa
 de label extra no `keycloak` nem de flag no `deploy.sh`, é automático.
 Sem esses arquivos, o Traefik cai de volta no certificado autoassinado
 próprio (`CN=TRAEFIK DEFAULT CERT`).
@@ -271,8 +272,8 @@ descompasso — mas **não sobrescreve** os arquivos automaticamente
 > (só `CN=x` isolado) não pegava esse bug.
 >
 > Validado ao vivo de ponta a ponta: certificado de teste gerado com
-> `subject=CN=sso.papermoon.cloud, O=Prefeitura (CA de teste)`, colocado
-> em `traefik/certs/`, `setup.sh` detectou e confirmou o CN batendo,
+> `subject=CN=<hostname configurado em KC_HOSTNAME_FQDN>, O=Prefeitura (CA de teste)`,
+> colocado em `traefik/certs/`, `setup.sh` detectou e confirmou o CN batendo,
 > `docker compose up -d --force-recreate traefik` e o `openssl s_client`
 > confirmou o Traefik servindo **esse** certificado (não mais
 > `TRAEFIK DEFAULT CERT`) — depois removido, confirmando que o Traefik

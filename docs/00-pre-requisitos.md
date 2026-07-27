@@ -37,13 +37,13 @@ certificado TLS — três modos possíveis, escolha o que se aplica:
   autoassinado próprio, sem nenhuma configuração — o navegador mostra o
   aviso padrão de "conexão não é segura", esperado nesse modo.
 - **Produção real com [Let's Encrypt](https://letsencrypt.org/)**: exige
-  **DNS público** resolvendo `auth.prefeitura.gov.br` para o IP desta VM,
+  **DNS público** resolvendo `sso.rondonopolis.mt.gov.br` para o IP desta VM,
   e as portas 80/443 alcançáveis da internet (o desafio TLS-ALPN do
   Let's Encrypt acontece nelas). O `setup.sh` pergunta se quer ativar
   esse modo — se sim, o Traefik emite e renova o certificado sozinho.
 - **Certificado próprio, emitido pela CA interna/corporativa da
   prefeitura** (o caminho mais comum quando o domínio só resolve na rede
-  interna, como `sso.papermoon.cloud` hoje): não precisa de DNS público
+  interna, sem DNS público apontando pra fora): não precisa de DNS público
   nem de Let's Encrypt — só copiar `fullchain.pem`/`privkey.pem` em
   `traefik/certs/` e rodar `./setup.sh` de novo. Ver
   [Referência de Scripts](scripts-referencia.md#traefik).

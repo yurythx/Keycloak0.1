@@ -12,7 +12,7 @@ TLS ou realm de problemas de LDAP, que só entram na próxima etapa.
 ```bash
 cat secrets/kc_admin_password.txt
 ```
-Acesse `https://auth.prefeitura.gov.br/admin` e logue como `kc_admin`
+Acesse `https://sso.rondonopolis.mt.gov.br/admin` e logue como `kc_admin`
 com a senha acima.
 
 ### 2. Criar o realm de produção
@@ -43,7 +43,7 @@ Criar o client `test-oidc`, Access Type `Confidential`.
        --data-urlencode "username=teste.ti" \
        --data-urlencode "password=<SENHA>" \
        -d "grant_type=password" \
-       https://auth.prefeitura.gov.br/realms/prefeitura/protocol/openid-connect/token
+       https://sso.rondonopolis.mt.gov.br/realms/prefeitura/protocol/openid-connect/token
   ```
   Deve retornar um `access_token` JWT válido.
 
@@ -54,7 +54,7 @@ Criar o client `test-oidc`, Access Type `Confidential`.
   > validado durante o desenvolvimento desta stack).
 
 - [ ] **Auditoria do token**: decodificar em [jwt.io](https://jwt.io) e
-      confirmar que `iss` = `https://auth.prefeitura.gov.br/realms/prefeitura`.
+      confirmar que `iss` = `https://sso.rondonopolis.mt.gov.br/realms/prefeitura`.
 
 ---
 Próxima etapa: **[Etapa 3 — Federação com o Active Directory →](03-federacao-ad.md)**
